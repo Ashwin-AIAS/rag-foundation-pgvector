@@ -1,0 +1,52 @@
+// API service for backend communication
+const API_BASE_URL = 'http://localhost:8000';
+
+/**
+ * Upload a file to the backend ingestion endpoint
+ * @param {File} file - The file to upload (PDF or TXT)
+ * @returns {Promise<Object>} Upload result
+ */
+export async function uploadFile(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await fetch(`${API_BASE_URL}/ingest`, {
+        method: 'POST',
+        body: formData,
+    });
+
+    if (!response.ok) {
+        const error = await response.json().catch(() => ({ detail: 'Upload failed' }));
+        throw new Error(error.detail || `HTTP ${response.status}`);
+    }
+
+    return response.json();
+}
+
+/**
+ * Query the RAG system with a question
+ * @param {string} question - The user's question
+ * @param {number} topK - Optional: number of chunks to retrieve
+ * @returns {Promise<Object>} Query result with answer and chunks
+ */
+export async function queryDocuments(question, topK = null) {
+    const body = { question };
+    if (topK !== null) {
+        body.top_k = topK;
+    }
+
+    const response = await fetch(`${API_BASE_URL}/query`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+        const error = await response.json().catch(() => ({ detail: 'Query failed' }));
+        throw new Error(error.detail || `HTTP ${response.status}`);
+    }
+
+    return response.json();
+}
