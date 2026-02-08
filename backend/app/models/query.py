@@ -1,0 +1,45 @@
+from pydantic import BaseModel, Field
+from typing import List, Optional, Dict, Any
+
+
+class QueryRequest(BaseModel):
+    """
+    Request model for the query endpoint.
+    """
+    question: str = Field(
+        ...,
+        description="The user's question to answer using RAG",
+        min_length=1,
+        example="What is the company's vacation policy?"
+    )
+    top_k: Optional[int] = Field(
+        None,
+        description="Number of document chunks to retrieve (overrides default)",
+        ge=1,
+        le=20,
+        example=5
+    )
+
+
+class RetrievedChunk(BaseModel):
+    """
+    Model representing a single retrieved document chunk.
+    """
+    chunk_text: str = Field(..., description="The text content of the chunk")
+    source_file: str = Field(..., description="Original document filename")
+    chunk_index: int = Field(..., description="Position in the original document")
+    similarity_score: float = Field(..., description="Cosine similarity score (0-1)")
+    metadata: Optional[Dict[str, Any]] = Field(None, description="Additional metadata")
+
+
+class QueryResponse(BaseModel):
+    """
+    Response model for the query endpoint.
+    """
+    answer: str = Field(..., description="The generated answer")
+    retrieved_chunks: List[RetrievedChunk] = Field(
+        ...,
+        description="Document chunks used to generate the answer"
+    )
+    num_chunks_retrieved: int = Field(..., description="Number of chunks retrieved")
+    question: str = Field(..., description="The original question")

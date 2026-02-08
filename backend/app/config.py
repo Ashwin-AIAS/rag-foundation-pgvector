@@ -23,6 +23,16 @@ class Settings:
     MAX_FILE_SIZE_MB: int = int(os.getenv("MAX_FILE_SIZE_MB", "10"))
     SUPPORTED_FILE_TYPES: list = ["pdf", "txt"]
     
+    # RAG retrieval settings
+    TOP_K: int = int(os.getenv("TOP_K", "5"))
+    SIMILARITY_THRESHOLD: float = float(os.getenv("SIMILARITY_THRESHOLD", "0.7"))
+    MIN_CHUNKS_REQUIRED: int = int(os.getenv("MIN_CHUNKS_REQUIRED", "1"))
+    
+    # RAG generation settings
+    OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    GENERATION_TEMPERATURE: float = float(os.getenv("GENERATION_TEMPERATURE", "0.0"))
+    GENERATION_MAX_TOKENS: int = int(os.getenv("GENERATION_MAX_TOKENS", "500"))
+    
     @property
     def database_url(self) -> str:
         """Construct database URL from components"""

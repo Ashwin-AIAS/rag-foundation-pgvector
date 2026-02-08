@@ -8,6 +8,11 @@ from pathlib import Path
 from app.database import check_database_connection, check_pgvector_extension, get_db
 from app.config import settings
 from app.services.ingestion import DocumentIngestionService
+from app.services.embedding_service import EmbeddingService
+from app.services.retrieval_service import RetrievalService
+from app.services.prompt_service import PromptService
+from app.services.generation_service import GenerationService
+from app.models.query import QueryRequest, QueryResponse, RetrievedChunk
 
 # Create FastAPI application
 app = FastAPI(
@@ -160,6 +165,91 @@ async def delete_document(filename: str, db: Session = Depends(get_db)):
     }
 
 
-# Future RAG endpoints:
-# - POST /query - Query documents with semantic search
+# RAG Query Endpoint
+
+@app.post("/query", response_model=QueryResponse)
+async def query_documents(
+    request: QueryRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Query the RAG system with a question.
+    
+    This endpoint executes the complete RAG workflow:
+    1. Convert question to embedding
+    2. Retrieve relevant document chunks
+    3. Construct grounded prompt
+    4. Generate answer using OpenAI
+    
+    The system enforces strict grounding constraints:
+    - Only uses information from retrieved documents
+    - Refuses to answer if context is insufficient
+    - Does not use external knowledge or make assumptions
+    """
+    # Validate question
+    if not request.question or not request.question.strip():
+        raise HTTPException(status_code=400, detail="Question cannot be empty")
+    
+    try:
+        # Step 1: Convert question to embedding
+        embedding_service = EmbeddingService()
+        query_embedding = embedding_service.embed_query(request.question)
+        
+        # Step 2: Retrieve relevant chunks
+        retrieval_service = RetrievalService(db)
+        top_k = request.top_k if request.top_k is not None else settings.TOP_K
+        retrieved_chunks = retrieval_service.retrieve(
+            query_embedding=query_embedding,
+            top_k=top_k
+        )
+        
+        # Step 3: Check if we have sufficient context
+        if len(retrieved_chunks) < settings.MIN_CHUNKS_REQUIRED:
+            # Not enough relevant context found
+            return QueryResponse(
+                answer="I cannot answer this question based on the available documents.",
+                retrieved_chunks=[],
+                num_chunks_retrieved=0,
+                question=request.question
+            )
+        
+        # Step 4: Construct prompt with retrieved context
+        prompt_service = PromptService()
+        prompt = prompt_service.construct_prompt(
+            retrieved_chunks=retrieved_chunks,
+            user_question=request.question
+        )
+        
+        # Step 5: Generate answer
+        generation_service = GenerationService()
+        answer = generation_service.generate(prompt)
+        
+        # Step 6: Format response
+        response_chunks = [
+            RetrievedChunk(
+                chunk_text=chunk["chunk_text"],
+                source_file=chunk["source_file"],
+                chunk_index=chunk["chunk_index"],
+                similarity_score=chunk["similarity_score"],
+                metadata=chunk.get("metadata")
+            )
+            for chunk in retrieved_chunks
+        ]
+        
+        return QueryResponse(
+            answer=answer,
+            retrieved_chunks=response_chunks,
+            num_chunks_retrieved=len(response_chunks),
+            question=request.question
+        )
+    
+    except ValueError as e:
+        # Validation errors
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        # Internal errors (embedding, retrieval, or generation failures)
+        raise HTTPException(status_code=500, detail=f"Query failed: {str(e)}")
+
+
+# Future endpoints:
 # - GET /documents/{filename}/chunks - Retrieve chunks for a specific document

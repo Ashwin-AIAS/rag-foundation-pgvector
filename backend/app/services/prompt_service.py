@@ -1,0 +1,106 @@
+from typing import List, Dict, Any
+
+
+class PromptService:
+    """
+    Service for constructing grounded prompts from retrieved context.
+    
+    Builds prompts that enforce strict grounding constraints to prevent
+    the LLM from using external knowledge or hallucinating information.
+    """
+    
+    def __init__(self):
+        """Initialize the prompt service."""
+        pass
+    
+    def construct_prompt(
+        self,
+        retrieved_chunks: List[Dict[str, Any]],
+        user_question: str
+    ) -> str:
+        """
+        Construct a complete prompt for the LLM.
+        
+        Args:
+            retrieved_chunks: List of retrieved document chunks with metadata
+            user_question: The user's original question
+            
+        Returns:
+            A complete prompt string with system instructions, context, and question
+            
+        The prompt structure:
+            1. System instructions with grounding rules
+            2. Retrieved context with source citations
+            3. User's question
+        """
+        # Build the system instructions
+        system_prompt = self._build_system_instructions()
+        
+        # Build the context section from retrieved chunks
+        context_section = self._build_context_section(retrieved_chunks)
+        
+        # Build the user question section
+        question_section = self._build_question_section(user_question)
+        
+        # Combine all sections
+        complete_prompt = f"{system_prompt}\n\n{context_section}\n\n{question_section}"
+        
+        return complete_prompt
+    
+    def _build_system_instructions(self) -> str:
+        """
+        Build the system instructions that enforce grounding constraints.
+        
+        Returns:
+            System prompt string with explicit rules
+        """
+        return """You are a helpful assistant that answers questions based ONLY on the provided context.
+
+CRITICAL RULES:
+1. Use ONLY information from the context below
+2. If the context does not contain enough information to answer the question, you MUST respond with: "I cannot answer this question based on the available documents."
+3. Do not use any external knowledge or information not present in the context
+4. Do not make assumptions or inferences beyond what is explicitly stated in the context
+5. When providing an answer, cite the source document(s) used
+
+Your role is to be a faithful representative of the provided documents, not a general knowledge assistant."""
+    
+    def _build_context_section(self, chunks: List[Dict[str, Any]]) -> str:
+        """
+        Build the context section from retrieved chunks.
+        
+        Args:
+            chunks: List of retrieved chunks with text and metadata
+            
+        Returns:
+            Formatted context string with source citations
+        """
+        if not chunks:
+            return "CONTEXT:\nNo relevant documents found."
+        
+        context_parts = ["CONTEXT:"]
+        
+        for i, chunk in enumerate(chunks, 1):
+            source = chunk.get("source_file", "Unknown")
+            chunk_idx = chunk.get("chunk_index", "?")
+            text = chunk.get("chunk_text", "")
+            score = chunk.get("similarity_score", 0.0)
+            
+            # Format each chunk with clear source attribution
+            chunk_header = f"\n[Document {i}: {source}, Chunk {chunk_idx}, Relevance: {score:.2f}]"
+            context_parts.append(chunk_header)
+            context_parts.append(text)
+        
+        return "\n".join(context_parts)
+    
+    def _build_question_section(self, question: str) -> str:
+        """
+        Build the user question section.
+        
+        Args:
+            question: The user's question
+            
+        Returns:
+            Formatted question string
+        """
+        return f"USER QUESTION:\n{question}\n\nANSWER:"
