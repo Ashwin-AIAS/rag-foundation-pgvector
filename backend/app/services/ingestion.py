@@ -4,6 +4,7 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from langchain_community.document_loaders import PyPDFLoader, TextLoader
+from langchain_community.document_loaders import Docx2txtLoader  # For Word documents
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_openai import OpenAIEmbeddings
 from langchain.schema import Document
@@ -42,7 +43,7 @@ class DocumentIngestionService:
         
         Args:
             file_path: Path to the document file
-            file_type: File extension (e.g., 'pdf', 'txt')
+            file_type: File extension (e.g., 'pdf', 'txt', 'docx')
             
         Returns:
             List of LangChain Document objects
@@ -51,6 +52,8 @@ class DocumentIngestionService:
             loader = PyPDFLoader(file_path)
         elif file_type == "txt":
             loader = TextLoader(file_path, encoding="utf-8")
+        elif file_type == "docx":
+            loader = Docx2txtLoader(file_path)
         else:
             raise ValueError(f"Unsupported file type: {file_type}")
         
@@ -111,7 +114,7 @@ class DocumentIngestionService:
                 chunk_index=idx,
                 chunk_text=chunk.page_content,
                 embedding=embedding,
-                metadata=metadata
+                chunk_metadata=metadata
             )
             
             self.db.add(db_chunk)

@@ -12,9 +12,9 @@ export default function FileUpload({ onUploadSuccess }) {
         if (!file) return;
 
         // Validate file type
-        const validTypes = ['application/pdf', 'text/plain'];
+        const validTypes = ['application/pdf', 'text/plain', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
         if (!validTypes.includes(file.type)) {
-            setError('Only PDF and TXT files are supported');
+            setError('Only PDF, TXT, and DOCX files are supported');
             return;
         }
 
@@ -49,13 +49,13 @@ export default function FileUpload({ onUploadSuccess }) {
                             Uploading...
                         </>
                     ) : (
-                        'Choose File (PDF or TXT)'
+                        'Choose File (PDF, TXT, or DOCX)'
                     )}
                 </label>
                 <input
                     id="file-input"
                     type="file"
-                    accept=".pdf,.txt"
+                    accept=".pdf,.txt,.docx"
                     onChange={handleFileChange}
                     disabled={isUploading}
                     style={{ display: 'none' }}

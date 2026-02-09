@@ -21,7 +21,7 @@ class Settings:
     CHUNK_SIZE: int = int(os.getenv("CHUNK_SIZE", "1000"))
     CHUNK_OVERLAP: int = int(os.getenv("CHUNK_OVERLAP", "200"))
     MAX_FILE_SIZE_MB: int = int(os.getenv("MAX_FILE_SIZE_MB", "10"))
-    SUPPORTED_FILE_TYPES: list = ["pdf", "txt"]
+    SUPPORTED_FILE_TYPES: list = ["pdf", "txt", "docx"]
     
     # RAG retrieval settings
     TOP_K: int = int(os.getenv("TOP_K", "5"))

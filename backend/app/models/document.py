@@ -19,13 +19,13 @@ class DocumentChunk(Base):
     chunk_index = Column(Integer, nullable=False)
     chunk_text = Column(Text, nullable=False)
     embedding = Column(Vector(1536))  # OpenAI ada-002 embedding dimension
-    metadata = Column(JSONB)
+    chunk_metadata = Column(JSONB)  # Renamed from 'metadata' to avoid SQLAlchemy reserved keyword
     created_at = Column(TIMESTAMP, server_default=func.now())
     
     # Ensure unique chunks per document
     __table_args__ = (
         UniqueConstraint('source_file', 'chunk_index', name='uq_source_chunk'),
-        Index('idx_document_chunks_metadata', 'metadata', postgresql_using='gin'),
+        Index('idx_document_chunks_metadata', 'chunk_metadata', postgresql_using='gin'),
     )
     
     def __repr__(self):
