@@ -14,7 +14,7 @@ class EmbeddingService:
     def __init__(self):
         """Initialize the Gemini embeddings client."""
         genai.configure(api_key=settings.GEMINI_API_KEY)
-        self.model_name = "text-embedding-004"
+        self.model_name = "models/gemini-embedding-001"
     
     def embed_query(self, query: str) -> List[float]:
         """
@@ -36,7 +36,8 @@ class EmbeddingService:
             result = genai.embed_content(
                 model=self.model_name,
                 content=query,
-                task_type="retrieval_query"
+                task_type="retrieval_query",
+                output_dimensionality=768  # Match database schema
             )
             return result['embedding']
         except Exception as e:

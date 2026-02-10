@@ -13,7 +13,8 @@ class GeminiEmbeddingService:
     def __init__(self):
         """Initialize the Gemini embedding service with API key."""
         genai.configure(api_key=settings.GEMINI_API_KEY)
-        self.model_name = "text-embedding-004"
+        # Gemini embedding model needs 'models/' prefix
+        self.model_name = "models/gemini-embedding-001"
     
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
         """
@@ -32,7 +33,8 @@ class GeminiEmbeddingService:
             result = genai.embed_content(
                 model=self.model_name,
                 content=text,
-                task_type="retrieval_document"
+                task_type="retrieval_document",
+                output_dimensionality=768  # Match database schema
             )
             embeddings.append(result['embedding'])
         
@@ -51,7 +53,8 @@ class GeminiEmbeddingService:
         result = genai.embed_content(
             model=self.model_name,
             content=text,
-            task_type="retrieval_query"
+            task_type="retrieval_query",
+            output_dimensionality=768  # Match database schema
         )
         
         return result['embedding']
