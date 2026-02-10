@@ -6,9 +6,9 @@ from sqlalchemy.orm import Session
 from langchain_community.document_loaders import PyPDFLoader, TextLoader
 from langchain_community.document_loaders import Docx2txtLoader  # For Word documents
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_openai import OpenAIEmbeddings
 from langchain.schema import Document
 
+from app.services.gemini_embedding_service import GeminiEmbeddingService
 from app.models.document import DocumentChunk
 from app.config import settings
 
@@ -26,10 +26,7 @@ class DocumentIngestionService:
     
     def __init__(self, db: Session):
         self.db = db
-        self.embeddings = OpenAIEmbeddings(
-            openai_api_key=settings.OPENAI_API_KEY,
-            model="text-embedding-ada-002"
-        )
+        self.embeddings = GeminiEmbeddingService()
         self.text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=settings.CHUNK_SIZE,
             chunk_overlap=settings.CHUNK_OVERLAP,

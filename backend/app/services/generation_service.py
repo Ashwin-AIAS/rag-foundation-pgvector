@@ -1,24 +1,24 @@
-from openai import OpenAI
+import google.generativeai as genai
 from app.config import settings
 
 
 class GenerationService:
     """
-    Service for generating answers using OpenAI's chat completion API.
+    Service for generating answers using Google's Gemini API.
     
     Sends prompts to the LLM and returns generated responses.
     """
     
     def __init__(self):
-        """Initialize the OpenAI client."""
-        self.client = OpenAI(api_key=settings.OPENAI_API_KEY)
-        self.model = settings.OPENAI_MODEL
+        """Initialize the Gemini client."""
+        genai.configure(api_key=settings.GEMINI_API_KEY)
+        self.model = genai.GenerativeModel(settings.GEMINI_MODEL)
         self.temperature = settings.GENERATION_TEMPERATURE
         self.max_tokens = settings.GENERATION_MAX_TOKENS
     
     def generate(self, prompt: str) -> str:
         """
-        Generate an answer using the OpenAI API.
+        Generate an answer using the Gemini API.
         
         Args:
             prompt: The complete prompt including system instructions,
@@ -31,20 +31,18 @@ class GenerationService:
             Exception: If the API call fails
         """
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ],
+            generation_config = genai.types.GenerationConfig(
                 temperature=self.temperature,
-                max_tokens=self.max_tokens
+                max_output_tokens=self.max_tokens
+            )
+            
+            response = self.model.generate_content(
+                prompt,
+                generation_config=generation_config
             )
             
             # Extract the generated text
-            answer = response.choices[0].message.content
+            answer = response.text
             
             return answer.strip()
             

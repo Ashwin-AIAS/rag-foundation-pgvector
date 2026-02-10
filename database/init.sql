@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS document_chunks (
     source_file VARCHAR(255) NOT NULL,
     chunk_index INTEGER NOT NULL,
     chunk_text TEXT NOT NULL,
-    embedding vector(1536),  -- OpenAI text-embedding-ada-002 produces 1536-dimensional embeddings
+    embedding vector(768),  -- Gemini text-embedding-004 produces 768-dimensional embeddings
     chunk_metadata JSONB,  -- Renamed from metadata to avoid SQLAlchemy reserved keyword
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     

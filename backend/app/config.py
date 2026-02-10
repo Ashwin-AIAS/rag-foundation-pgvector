@@ -14,8 +14,8 @@ class Settings:
     POSTGRES_HOST: str = os.getenv("POSTGRES_HOST", "postgres")
     POSTGRES_PORT: str = os.getenv("POSTGRES_PORT", "5432")
     
-    # OpenAI settings
-    OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
+    # Gemini API settings
+    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
     
     # Document ingestion settings
     CHUNK_SIZE: int = int(os.getenv("CHUNK_SIZE", "1000"))
@@ -29,7 +29,7 @@ class Settings:
     MIN_CHUNKS_REQUIRED: int = int(os.getenv("MIN_CHUNKS_REQUIRED", "1"))
     
     # RAG generation settings
-    OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
     GENERATION_TEMPERATURE: float = float(os.getenv("GENERATION_TEMPERATURE", "0.0"))
     GENERATION_MAX_TOKENS: int = int(os.getenv("GENERATION_MAX_TOKENS", "500"))
     

@@ -67,7 +67,7 @@ async def get_config():
         "database_host": settings.POSTGRES_HOST,
         "database_port": settings.POSTGRES_PORT,
         "database_name": settings.POSTGRES_DB,
-        "openai_configured": bool(settings.OPENAI_API_KEY),
+        "gemini_configured": bool(settings.GEMINI_API_KEY),
         "chunk_size": settings.CHUNK_SIZE,
         "chunk_overlap": settings.CHUNK_OVERLAP,
         "max_file_size_mb": settings.MAX_FILE_SIZE_MB,
