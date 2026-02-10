@@ -1,3 +1,4 @@
+import FeedbackButtons from './FeedbackButtons';
 import './AnswerDisplay.css';
 
 export default function AnswerDisplay({ answer, isLoading }) {
@@ -59,6 +60,13 @@ export default function AnswerDisplay({ answer, isLoading }) {
                         </div>
                     </div>
                 )}
+
+                {/* Feedback buttons - shown for all answers including refusals */}
+                <FeedbackButtons
+                    question={answer.question}
+                    answer={answer.answer}
+                    numChunksRetrieved={answer.num_chunks_retrieved}
+                />
             </div>
         </div>
     );

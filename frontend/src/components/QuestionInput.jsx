@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { queryDocuments } from '../services/api';
 import './QuestionInput.css';
 
-export default function QuestionInput({ onQuerySuccess, disabled }) {
+export default function QuestionInput({ onQuerySuccess, onQueryStart, disabled }) {
     const [question, setQuestion] = useState('');
     const [isQuerying, setIsQuerying] = useState(false);
     const [error, setError] = useState(null);
@@ -18,6 +18,11 @@ export default function QuestionInput({ onQuerySuccess, disabled }) {
 
         setError(null);
         setIsQuerying(true);
+
+        // Notify parent that query is starting
+        if (onQueryStart) {
+            onQueryStart();
+        }
 
         try {
             const result = await queryDocuments(question);

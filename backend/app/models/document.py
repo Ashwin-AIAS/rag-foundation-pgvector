@@ -30,3 +30,24 @@ class DocumentChunk(Base):
     
     def __repr__(self):
         return f"<DocumentChunk(id={self.id}, source={self.source_file}, chunk={self.chunk_index})>"
+
+
+class Feedback(Base):
+    """
+    SQLAlchemy model for user feedback on generated answers.
+    
+    Stores user ratings (positive/negative) on RAG system responses.
+    This data is for analysis only and does NOT modify system behavior.
+    """
+    __tablename__ = "feedback"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    question = Column(Text, nullable=False)
+    answer = Column(Text, nullable=False)
+    feedback = Column(String(10), nullable=False)  # 'positive' or 'negative'
+    num_chunks_retrieved = Column(Integer, nullable=False)
+    timestamp = Column(TIMESTAMP, nullable=False)  # When user gave feedback
+    created_at = Column(TIMESTAMP, server_default=func.now())  # When record was created
+    
+    def __repr__(self):
+        return f"<Feedback(id={self.id}, feedback={self.feedback}, chunks={self.num_chunks_retrieved})>"

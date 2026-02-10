@@ -30,3 +30,23 @@ ON document_chunks (source_file);
 CREATE INDEX IF NOT EXISTS document_chunks_metadata_idx 
 ON document_chunks 
 USING gin (chunk_metadata);
+
+-- Table for storing user feedback on generated answers
+-- This data is for analysis only and does NOT modify system behavior
+CREATE TABLE IF NOT EXISTS feedback (
+    id SERIAL PRIMARY KEY,
+    question TEXT NOT NULL,
+    answer TEXT NOT NULL,
+    feedback VARCHAR(10) NOT NULL CHECK (feedback IN ('positive', 'negative')),
+    num_chunks_retrieved INTEGER NOT NULL,
+    timestamp TIMESTAMP NOT NULL,  -- When user gave feedback
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP  -- When record was created
+);
+
+-- Create index on feedback type for analysis queries
+CREATE INDEX IF NOT EXISTS feedback_type_idx 
+ON feedback (feedback);
+
+-- Create index on timestamp for time-based analysis
+CREATE INDEX IF NOT EXISTS feedback_timestamp_idx 
+ON feedback (timestamp);

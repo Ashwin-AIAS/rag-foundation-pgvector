@@ -13,6 +13,8 @@ from app.services.retrieval_service import RetrievalService
 from app.services.prompt_service import PromptService
 from app.services.generation_service import GenerationService
 from app.models.query import QueryRequest, QueryResponse, RetrievedChunk
+from app.models.feedback import FeedbackRequest, FeedbackResponse
+from app.models.document import Feedback
 
 # Create FastAPI application
 app = FastAPI(
@@ -251,5 +253,49 @@ async def query_documents(
         raise HTTPException(status_code=500, detail=f"Query failed: {str(e)}")
 
 
+# Feedback Endpoint
+
+@app.post("/feedback", response_model=FeedbackResponse)
+async def submit_feedback(
+    request: FeedbackRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Submit user feedback on a generated answer.
+    
+    This endpoint stores user ratings (positive/negative) for analysis.
+    Feedback does NOT modify system behavior, retrieval, or generation.
+    It is purely for observational analysis and quality monitoring.
+    """
+    try:
+        # Create feedback record
+        feedback_record = Feedback(
+            question=request.question,
+            answer=request.answer,
+            feedback=request.feedback,
+            num_chunks_retrieved=request.num_chunks_retrieved,
+            timestamp=request.timestamp
+        )
+        
+        # Store in database
+        db.add(feedback_record)
+        db.commit()
+        db.refresh(feedback_record)
+        
+        return FeedbackResponse(
+            status="received",
+            feedback_id=feedback_record.id,
+            message="Thank you for your feedback"
+        )
+    
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to store feedback: {str(e)}"
+        )
+
+
 # Future endpoints:
 # - GET /documents/{filename}/chunks - Retrieve chunks for a specific document
+# - GET /feedback/stats - Get feedback statistics (for admin/analysis)
