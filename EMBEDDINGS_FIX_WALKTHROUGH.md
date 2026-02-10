@@ -6,7 +6,14 @@ Fixed the document ingestion error: `1 validation error for OpenAIEmbeddings __r
 
 ## Root Cause
 
-Version incompatibility between `langchain-openai==0.0.5` and `openai==1.10.0`. The older LangChain library attempted to pass a deprecated `proxies` parameter that OpenAI v1.x no longer accepts.
+**The actual issue:** Version incompatibility with `httpx>=0.28.0`, which removed the `proxies` parameter that `openai==1.10.0` attempts to use.
+
+**Why it happened:**
+1. `openai==1.10.0` tries to pass a `proxies` argument to the httpx client
+2. `httpx>=0.28.0` removed support for this deprecated parameter
+3. This caused a `TypeError` that was wrapped as a Pydantic `ValidationError` by `langchain-openai`
+
+**Initial misdiagnosis:** We first thought it was a `langchain-openai` version issue, but upgrading to 0.0.8 didn't fix it because the underlying problem was with `httpx`.
 
 ## Changes Made
 
@@ -15,11 +22,15 @@ Version incompatibility between `langchain-openai==0.0.5` and `openai==1.10.0`. 
 **File**: [requirements.txt](file:///C:/Users/mashw/OneDrive/Desktop/CollegeMaterials/RAG/backend/requirements.txt)
 
 ```diff
--langchain-openai==0.0.5
-+langchain-openai==0.0.6
++httpx==0.27.2  # Pin to avoid proxies parameter incompatibility
+ langchain==0.1.9
+-langchain-openai==0.0.6
++langchain-openai==0.0.8
+ langchain-community==0.0.24
 ```
 
-**Rationale**: Version 0.0.6 is the minimum version compatible with `openai>=1.6.1` and resolves the `proxies` parameter issue.
+**Key fix**: Pinned `httpx==0.27.2` to avoid the proxies parameter incompatibility
+**Additional upgrades**: Updated langchain packages to latest stable versions compatible with openai 1.10.0
 
 ### 2. Rebuilt Docker Container
 
