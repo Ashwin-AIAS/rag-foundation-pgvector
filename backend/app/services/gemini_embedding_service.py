@@ -13,7 +13,7 @@ class GeminiEmbeddingService:
     def __init__(self):
         """Initialize the Gemini embedding service with API key."""
         genai.configure(api_key=settings.GEMINI_API_KEY)
-        self.model_name = "models/text-embedding-004"
+        self.model_name = "text-embedding-004"
     
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
         """
