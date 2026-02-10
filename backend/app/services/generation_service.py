@@ -12,7 +12,9 @@ class GenerationService:
     def __init__(self):
         """Initialize the Gemini client."""
         genai.configure(api_key=settings.GEMINI_API_KEY)
-        self.model = genai.GenerativeModel(settings.GEMINI_MODEL)
+        # Generation models need 'models/' prefix
+        model_name = f"models/{settings.GEMINI_MODEL}"
+        self.model = genai.GenerativeModel(model_name)
         self.temperature = settings.GENERATION_TEMPERATURE
         self.max_tokens = settings.GENERATION_MAX_TOKENS
     
