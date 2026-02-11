@@ -1,4 +1,5 @@
 import os
+import logging
 from typing import List, Dict, Any
 from pathlib import Path
 from sqlalchemy.orm import Session
@@ -100,24 +101,42 @@ class DocumentIngestionService:
         Returns:
             Number of chunks stored
         """
-        for idx, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
-            # Extract metadata from the chunk
-            metadata = chunk.metadata.copy()
-            metadata["original_filename"] = source_filename
+
+        try:
+            # check if document exists and delete if so (idempotency)
+            existing_chunks = self.db.query(DocumentChunk).filter(
+                DocumentChunk.source_file == source_filename
+            ).count()
             
-            # Create database record
-            db_chunk = DocumentChunk(
-                source_file=source_filename,
-                chunk_index=idx,
-                chunk_text=chunk.page_content,
-                embedding=embedding,
-                chunk_metadata=metadata
-            )
+            if existing_chunks > 0:
+                logging.info(f"Replacing existing document '{source_filename}' with {len(chunks)} new chunks. "
+                             f"Deleting {existing_chunks} old chunks.")
+                self.db.query(DocumentChunk).filter(
+                    DocumentChunk.source_file == source_filename
+                ).delete()
+
+            for idx, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
+                # Extract metadata from the chunk
+                metadata = chunk.metadata.copy()
+                metadata["original_filename"] = source_filename
+                
+                # Create database record
+                db_chunk = DocumentChunk(
+                    source_file=source_filename,
+                    chunk_index=idx,
+                    chunk_text=chunk.page_content,
+                    embedding=embedding,
+                    chunk_metadata=metadata
+                )
+                
+                self.db.add(db_chunk)
             
-            self.db.add(db_chunk)
-        
-        self.db.commit()
-        return len(chunks)
+            self.db.commit()
+            return len(chunks)
+        except Exception as e:
+            self.db.rollback()
+            logging.error(f"Failed to store chunks for {source_filename}: {e}")
+            raise e
     
     def ingest_document(self, file_path: str, filename: str) -> Dict[str, Any]:
         """
