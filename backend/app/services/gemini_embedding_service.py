@@ -14,7 +14,7 @@ class GeminiEmbeddingService:
         """Initialize the Gemini embedding service with API key."""
         genai.configure(api_key=settings.GEMINI_API_KEY)
         # Gemini embedding model needs 'models/' prefix
-        self.model_name = "models/gemini-embedding-001"
+        self.model_name = settings.GEMINI_EMBEDDING_MODEL
     
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
         """

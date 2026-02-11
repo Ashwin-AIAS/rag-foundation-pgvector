@@ -63,7 +63,7 @@ class RetrievalService:
                 chunk_text,
                 source_file,
                 chunk_index,
-                metadata,
+                chunk_metadata,
                 1 - (embedding <=> :query_embedding) AS similarity_score
             FROM document_chunks
             WHERE 1 - (embedding <=> :query_embedding) >= :threshold
@@ -88,7 +88,7 @@ class RetrievalService:
                     "chunk_text": row.chunk_text,
                     "source_file": row.source_file,
                     "chunk_index": row.chunk_index,
-                    "metadata": row.metadata,
+                    "metadata": row.chunk_metadata,
                     "similarity_score": float(row.similarity_score)
                 })
             
