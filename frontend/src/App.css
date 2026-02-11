@@ -106,6 +106,40 @@
   margin: 0;
 }
 
+.document-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid #eee;
+}
+
+.document-name {
+  word-break: break-all;
+  margin-right: 10px;
+}
+
+.delete-btn {
+  background-color: #ff4444;
+  color: white;
+  border: none;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: background-color 0.2s;
+}
+
+.delete-btn:hover {
+  background-color: #cc0000;
+}
+
+/* Ensure list bullets are removed if they interfere with flex layout */
+.uploaded-files ul {
+  list-style-type: none;
+  padding: 0;
+}
+
 /* Common Styles */
 h2 {
   margin: 0 0 1rem 0;

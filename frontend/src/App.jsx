@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { getDocuments, deleteDocument } from './services/api';
 import FileUpload from './components/FileUpload';
 import QuestionInput from './components/QuestionInput';
 import AnswerDisplay from './components/AnswerDisplay';
@@ -9,10 +10,47 @@ function App() {
   const [uploadedFiles, setUploadedFiles] = useState([]);
   const [currentAnswer, setCurrentAnswer] = useState(null);
   const [isQuerying, setIsQuerying] = useState(false);
+  const [isLoadingDocs, setIsLoadingDocs] = useState(false);
+  const [deleteError, setDeleteError] = useState(null);
   const [conversationHistory, setConversationHistory] = useState([]);
 
-  const handleUploadSuccess = (filename) => {
-    setUploadedFiles(prev => [...prev, filename]);
+  useEffect(() => {
+    fetchDocuments();
+  }, []);
+
+  const fetchDocuments = async () => {
+    setIsLoadingDocs(true);
+    try {
+      const data = await getDocuments();
+      // extracting filenames from the array of objects returned by backend
+      const filenames = data.documents.map(doc => doc.filename);
+      setUploadedFiles(filenames);
+    } catch (error) {
+      console.error("Failed to fetch documents:", error);
+    } finally {
+      setIsLoadingDocs(false);
+    }
+  };
+
+  const handleUploadSuccess = () => {
+    fetchDocuments();
+  };
+
+  const handleDelete = async (filename) => {
+    if (!window.confirm(`Are you sure you want to delete "${filename}"? This cannot be undone.`)) {
+      return;
+    }
+
+    setDeleteError(null);
+    try {
+      await deleteDocument(filename);
+      // Optimistic update or refetch
+      setUploadedFiles(prev => prev.filter(f => f !== filename));
+    } catch (error) {
+      console.error("Failed to delete document:", error);
+      setDeleteError(`Failed to delete ${filename}`);
+      alert(`Error: ${error.message}`);
+    }
   };
 
   const handleQuerySuccess = (result) => {
@@ -62,7 +100,16 @@ function App() {
                 <h3>Uploaded Documents ({uploadedFiles.length})</h3>
                 <ul>
                   {uploadedFiles.map((file, index) => (
-                    <li key={index}>{file}</li>
+                    <li key={index} className="document-item">
+                      <span className="document-name">{file}</span>
+                      <button
+                        onClick={() => handleDelete(file)}
+                        className="delete-btn"
+                        title="Delete document"
+                      >
+                        Delete
+                      </button>
+                    </li>
                   ))}
                 </ul>
               </div>

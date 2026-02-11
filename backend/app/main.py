@@ -11,7 +11,9 @@ from app.services.ingestion import DocumentIngestionService
 from app.services.embedding_service import EmbeddingService
 from app.services.retrieval_service import RetrievalService
 from app.services.prompt_service import PromptService
+from app.services.prompt_service import PromptService
 from app.services.generation_service import GenerationService
+from app.services.document_service import DocumentService
 from app.models.query import QueryRequest, QueryResponse, RetrievedChunk
 from app.models.feedback import FeedbackRequest, FeedbackResponse
 from app.models.document import Feedback
@@ -140,8 +142,8 @@ async def list_documents(db: Session = Depends(get_db)):
     """
     List all ingested documents with statistics.
     """
-    ingestion_service = DocumentIngestionService(db)
-    documents = ingestion_service.list_documents()
+    document_service = DocumentService(db)
+    documents = document_service.list_documents()
     
     return {
         "documents": documents,
@@ -154,8 +156,8 @@ async def delete_document(filename: str, db: Session = Depends(get_db)):
     """
     Delete all chunks for a specific document.
     """
-    ingestion_service = DocumentIngestionService(db)
-    deleted_count = ingestion_service.delete_document(filename)
+    document_service = DocumentService(db)
+    deleted_count = document_service.delete_document(filename)
     
     if deleted_count == 0:
         raise HTTPException(status_code=404, detail="Document not found")

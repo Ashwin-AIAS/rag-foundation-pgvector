@@ -50,3 +50,33 @@ export async function queryDocuments(question, topK = null) {
 
     return response.json();
 }
+
+/**
+ * Get list of all uploaded documents
+ * @returns {Promise<Object>} List of documents
+ */
+export async function getDocuments() {
+    const response = await fetch(`${API_BASE_URL}/documents`);
+    if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+    }
+    return response.json();
+}
+
+/**
+ * Delete a document by filename
+ * @param {string} filename - Name of file to delete
+ * @returns {Promise<Object>} Deletion result
+ */
+export async function deleteDocument(filename) {
+    const response = await fetch(`${API_BASE_URL}/documents/${filename}`, {
+        method: 'DELETE',
+    });
+
+    if (!response.ok) {
+        const error = await response.json().catch(() => ({ detail: 'Deletion failed' }));
+        throw new Error(error.detail || `HTTP ${response.status}`);
+    }
+
+    return response.json();
+}
