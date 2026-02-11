@@ -63,6 +63,9 @@ CRITICAL RULES:
 4. Do not make assumptions or inferences beyond what is explicitly stated in the context
 5. When providing an answer, cite the source document(s) used
 
+6. If the question asks "how to" or for a procedure, format the answer as a clear, numbered list.
+7. Ensure all procedural steps are complete sentences and merged coherently from multiple chunks.
+
 Your role is to be a faithful representative of the provided documents, not a general knowledge assistant."""
     
     def _build_context_section(self, chunks: List[Dict[str, Any]]) -> str:
