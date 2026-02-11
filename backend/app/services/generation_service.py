@@ -1,3 +1,4 @@
+import logging
 import google.generativeai as genai
 from app.config import settings
 
@@ -42,6 +43,11 @@ class GenerationService:
                 prompt,
                 generation_config=generation_config
             )
+            
+            # Log response details for debugging
+            logging.debug(f"Generated answer length: {len(response.text)} chars")
+            if response.prompt_feedback:
+                logging.debug(f"Prompt feedback: {response.prompt_feedback}")
             
             # Extract the generated text
             answer = response.text
