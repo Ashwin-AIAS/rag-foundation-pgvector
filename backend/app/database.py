@@ -53,3 +53,18 @@ def check_pgvector_extension() -> bool:
     except Exception as e:
         print(f"pgvector check failed: {e}")
         return False
+
+def init_db():
+    """
+    TEMPORARY: Reset database schema to match SQLAlchemy models.
+    This drops all tables and recreates them.
+    REMOVE in production and replace with migrations.
+    """
+    # Import models so they are registered with Base.metadata
+    from app.models import document  # Contains DocumentChunk and Feedback
+    
+    print("WARNING: Resetting database schema (TEMPORARY DEV MODE)")
+    Base.metadata.drop_all(bind=engine)
+    print("Tables dropped.")
+    Base.metadata.create_all(bind=engine)
+    print("Tables recreated.")
