@@ -16,7 +16,8 @@ from app.services.generation_service import GenerationService
 from app.services.document_service import DocumentService
 from app.models.query import QueryRequest, QueryResponse, RetrievedChunk
 from app.models.feedback import FeedbackRequest, FeedbackResponse
-from app.models.document import Feedback
+
+from app.models.document import Feedback, DocumentChunk
 
 # Create FastAPI application
 app = FastAPI(
@@ -313,3 +314,16 @@ async def submit_feedback(
 # Future endpoints:
 # - GET /documents/{filename}/chunks - Retrieve chunks for a specific document
 # - GET /feedback/stats - Get feedback statistics (for admin/analysis)
+
+@app.get("/debug/chunks-count")
+def chunks_count(db: Session = Depends(get_db)):
+    total = db.query(DocumentChunk).count()
+    with_embedding = (
+        db.query(DocumentChunk)
+        .filter(DocumentChunk.embedding != None)
+        .count()
+    )
+    return {
+        "total_chunks": total,
+        "chunks_with_embeddings": with_embedding
+    }
