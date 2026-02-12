@@ -1,5 +1,9 @@
 // API service for backend communication
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
+if (!API_BASE_URL) {
+    console.error("VITE_API_BASE_URL is not defined! Make sure your .env file is set up correctly.");
+}
 
 /**
  * Upload a file to the backend ingestion endpoint
@@ -75,6 +79,28 @@ export async function deleteDocument(filename) {
 
     if (!response.ok) {
         const error = await response.json().catch(() => ({ detail: 'Deletion failed' }));
+        throw new Error(error.detail || `HTTP ${response.status}`);
+    }
+
+    return response.json();
+}
+
+/**
+ * Submit feedback for a generated answer
+ * @param {Object} feedbackData - Feedback payload
+ * @returns {Promise<Object>} Feedback submission result
+ */
+export async function submitFeedback(feedbackData) {
+    const response = await fetch(`${API_BASE_URL}/feedback`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(feedbackData),
+    });
+
+    if (!response.ok) {
+        const error = await response.json().catch(() => ({ detail: 'Feedback submission failed' }));
         throw new Error(error.detail || `HTTP ${response.status}`);
     }
 

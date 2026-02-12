@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { submitFeedback } from '../services/api';
 import './FeedbackButtons.css';
 
 /**
@@ -33,17 +34,7 @@ export default function FeedbackButtons({ question, answer, numChunksRetrieved, 
                 timestamp: new Date().toISOString()
             };
 
-            const response = await fetch('http://localhost:8000/feedback', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(feedbackData),
-            });
-
-            if (!response.ok) {
-                throw new Error('Failed to submit feedback');
-            }
+            await submitFeedback(feedbackData);
 
             setFeedbackGiven(feedbackType);
 
