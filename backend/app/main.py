@@ -26,13 +26,7 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# TEMPORARY: Reset DB on startup
-# Remove this in production!
-from app.database import init_db
 
-@app.on_event("startup")
-def on_startup():
-    init_db()
 
 # Configure CORS for future frontend integration
 # In production, set ALLOWED_ORIGINS env var to the frontend URL
