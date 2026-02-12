@@ -36,7 +36,11 @@ class Settings:
     
     @property
     def database_url(self) -> str:
-        """Construct database URL from components"""
+        """Construct database URL from components or use raw URL if provided"""
+        # Check for direct URL (common in managed services like Render/Railway/Neon)
+        if os.getenv("DATABASE_URL"):
+            return os.getenv("DATABASE_URL")
+            
         return f"postgresql://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
 
 # Create a global settings instance

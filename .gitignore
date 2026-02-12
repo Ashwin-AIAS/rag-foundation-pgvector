@@ -40,3 +40,9 @@ Thumbs.db
 # Docker
 *.log
 test_doc.txt
+
+*.txt
+test_*.py
+verify_*.py
+debug_*.py
+backend_logs.txt
