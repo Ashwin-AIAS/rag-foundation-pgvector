@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { uploadDocument } from '../services/api';
+import { uploadFile } from '../services/api';
 import { motion } from 'framer-motion';
 
 export default function FileUpload({ onUploadSuccess }) {
@@ -30,7 +30,7 @@ export default function FileUpload({ onUploadSuccess }) {
         setMessage(null);
 
         try {
-            const response = await uploadDocument(file);
+            const response = await uploadFile(file);
             setMessage({ type: 'success', text: `Systems upgraded: ${file.name} integrated successfully.` });
             if (onUploadSuccess) onUploadSuccess();
         } catch (error) {

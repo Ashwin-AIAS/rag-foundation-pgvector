@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { queryRAG } from '../services/api';
+import { queryDocuments } from '../services/api';
 import { motion } from 'framer-motion';
 
 function QuestionInput({ onQuerySuccess, onQueryStart, disabled }) {
@@ -14,7 +14,7 @@ function QuestionInput({ onQuerySuccess, onQueryStart, disabled }) {
         if (onQueryStart) onQueryStart();
 
         try {
-            const result = await queryRAG(question);
+            const result = await queryDocuments(question);
             onQuerySuccess(result);
             setQuestion('');
         } catch (error) {
