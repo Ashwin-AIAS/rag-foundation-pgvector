@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { submitFeedback } from '../services/api';
-import './FeedbackButtons.css';
+// Removed FeedbackButtons.css import
 
 /**
  * FeedbackButtons Component
@@ -51,41 +51,61 @@ export default function FeedbackButtons({ question, answer, numChunksRetrieved, 
     };
 
     return (
-        <div className="feedback-section">
-            <p className="feedback-prompt">Was this answer helpful?</p>
+        <div className="flex flex-col items-end gap-2">
+            <div className="flex items-center gap-3">
+                <span className="text-[10px] uppercase tracking-widest text-cyber-text/40">Rate Response:</span>
 
-            <div className="feedback-buttons">
-                <button
-                    className={`feedback-btn feedback-btn-positive ${feedbackGiven === 'positive' ? 'active' : ''}`}
-                    onClick={() => handleFeedback('positive')}
-                    disabled={feedbackGiven !== null || isSubmitting}
-                    aria-label="Helpful"
-                >
-                    <span className="feedback-icon">👍</span>
-                    <span className="feedback-label">Helpful</span>
-                </button>
+                <div className="flex gap-2">
+                    <button
+                        className={`
+                            p-1.5 rounded transition-all duration-300 flex items-center gap-1.5
+                            ${feedbackGiven === 'positive'
+                                ? 'bg-green-500/20 text-green-400 border border-green-500/50 shadow-[0_0_10px_rgba(74,222,128,0.2)]'
+                                : 'text-cyber-text/50 hover:text-green-400 hover:bg-green-500/10'
+                            }
+                            ${(feedbackGiven && feedbackGiven !== 'positive') || isSubmitting ? 'opacity-30 cursor-not-allowed' : ''}
+                        `}
+                        onClick={() => handleFeedback('positive')}
+                        disabled={feedbackGiven !== null || isSubmitting}
+                        aria-label="Helpful"
+                        title="Mark as Helpful"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
+                        </svg>
+                    </button>
 
-                <button
-                    className={`feedback-btn feedback-btn-negative ${feedbackGiven === 'negative' ? 'active' : ''}`}
-                    onClick={() => handleFeedback('negative')}
-                    disabled={feedbackGiven !== null || isSubmitting}
-                    aria-label="Not helpful"
-                >
-                    <span className="feedback-icon">👎</span>
-                    <span className="feedback-label">Not helpful</span>
-                </button>
+                    <button
+                        className={`
+                            p-1.5 rounded transition-all duration-300 flex items-center gap-1.5
+                            ${feedbackGiven === 'negative'
+                                ? 'bg-red-500/20 text-red-400 border border-red-500/50 shadow-[0_0_10px_rgba(248,113,113,0.2)]'
+                                : 'text-cyber-text/50 hover:text-red-400 hover:bg-red-500/10'
+                            }
+                            ${(feedbackGiven && feedbackGiven !== 'negative') || isSubmitting ? 'opacity-30 cursor-not-allowed' : ''}
+                        `}
+                        onClick={() => handleFeedback('negative')}
+                        disabled={feedbackGiven !== null || isSubmitting}
+                        aria-label="Not helpful"
+                        title="Mark as Unhelpful"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14H5.236a2 2 0 01-1.789-2.894l3.5-7A2 2 0 018.736 3h4.018a2 2 0 01.485.06l3.76.94m-7 10v5a2 2 0 002 2h.095c.5 0 .905-.405.905-.905 0-.714.211-1.412.608-2.006L17 13V4m-7 10h2m5-10h2a2 2 0 012 2v6a2 2 0 01-2 2h-2.5" />
+                        </svg>
+                    </button>
+                </div>
             </div>
 
             {feedbackGiven && (
-                <p className="feedback-confirmation">
-                    Thank you for your feedback!
-                </p>
+                <div className="text-[10px] text-cyber-primary tracking-wider animate-pulse font-mono">
+                    FEEDBACK_LOGGED_SUCCESSFULLY
+                </div>
             )}
 
             {error && (
-                <p className="feedback-error">
-                    {error}
-                </p>
+                <div className="text-[10px] text-red-400 tracking-wider font-mono">
+                    ERROR: {error}
+                </div>
             )}
         </div>
     );

@@ -1,81 +1,72 @@
 import { useState } from 'react';
-import { queryDocuments } from '../services/api';
-import './QuestionInput.css';
+import { queryRAG } from '../services/api';
+import { motion } from 'framer-motion';
 
-export default function QuestionInput({ onQuerySuccess, onQueryStart, disabled }) {
+function QuestionInput({ onQuerySuccess, onQueryStart, disabled }) {
     const [question, setQuestion] = useState('');
-    const [isQuerying, setIsQuerying] = useState(false);
-    const [error, setError] = useState(null);
+    const [isLoading, setIsLoading] = useState(false);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (!question.trim() || disabled) return;
 
-        // Validate question
-        if (!question.trim()) {
-            setError('Question cannot be empty');
-            return;
-        }
-
-        setError(null);
-        setIsQuerying(true);
-
-        // Notify parent that query is starting
-        if (onQueryStart) {
-            onQueryStart();
-        }
+        setIsLoading(true);
+        if (onQueryStart) onQueryStart();
 
         try {
-            const result = await queryDocuments(question);
+            const result = await queryRAG(question);
             onQuerySuccess(result);
-            setQuestion(''); // Clear input after successful query
-        } catch (err) {
-            setError(err.message);
+            setQuestion('');
+        } catch (error) {
+            console.error("Query failed:", error);
+            alert("Failed to get answer. Please try again.");
         } finally {
-            setIsQuerying(false);
+            setIsLoading(false);
         }
     };
 
     return (
-        <div className="question-input">
-            <h2>Ask a Question</h2>
-            <form onSubmit={handleSubmit}>
-                <div className="input-container">
+        <div className="w-full">
+            <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3">
+                <div className="relative flex-1">
                     <input
                         type="text"
                         value={question}
                         onChange={(e) => setQuestion(e.target.value)}
-                        placeholder="What would you like to know?"
-                        disabled={isQuerying || disabled}
-                        className="question-field"
+                        placeholder={disabled ? "Upload documents to initialize system..." : "Enter query protocol..."}
+                        disabled={disabled || isLoading}
+                        className={`
+              w-full bg-cyber-darker border border-cyber-primary/30 rounded-lg px-4 py-3 
+              text-cyber-text placeholder-cyber-text/30 focus:outline-none focus:border-cyber-primary 
+              focus:shadow-[0_0_15px_rgba(0,212,255,0.2)] transition-all duration-300
+              disabled:opacity-50 disabled:cursor-not-allowed
+            `}
                     />
-                    <button
-                        type="submit"
-                        disabled={isQuerying || disabled || !question.trim()}
-                        className="submit-button"
-                    >
-                        {isQuerying ? (
-                            <>
-                                <span className="spinner"></span>
-                                Querying...
-                            </>
-                        ) : (
-                            'Ask'
-                        )}
-                    </button>
+                    {isLoading && (
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                            <div className="w-4 h-4 border-2 border-cyber-primary border-t-transparent rounded-full animate-spin"></div>
+                        </div>
+                    )}
                 </div>
 
-                {disabled && (
-                    <p className="info-message">
-                        Upload a document first to ask questions
-                    </p>
-                )}
-
-                {error && (
-                    <div className="error-message fade-in">
-                        ✗ {error}
-                    </div>
-                )}
+                <motion.button
+                    whileHover={{ scale: 1.02, boxShadow: "0 0 15px rgba(0, 212, 255, 0.4)" }}
+                    whileTap={{ scale: 0.98 }}
+                    type="submit"
+                    disabled={disabled || isLoading || !question.trim()}
+                    className={`
+            px-6 py-3 rounded-lg font-bold uppercase tracking-wider text-sm transition-all duration-300
+            ${disabled || isLoading || !question.trim()
+                            ? 'bg-cyber-darker border border-cyber-text/10 text-cyber-text/20 cursor-not-allowed'
+                            : 'bg-gradient-to-r from-cyber-primary to-[#00a3cc] text-black border border-cyber-primary shadow-[0_0_10px_rgba(0,212,255,0.2)]'
+                        }
+          `}
+                >
+                    {isLoading ? 'PROCESSING...' : 'EXECUTE'}
+                </motion.button>
             </form>
         </div>
     );
 }
+
+export default QuestionInput;
