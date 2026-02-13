@@ -20,9 +20,14 @@ export default function FileUpload({ onUploadSuccess }) {
     const processFile = async (file) => {
         if (!file) return;
 
-        // Validate file type (simple check)
-        if (!file.type.includes('pdf') && !file.type.includes('text') && !file.name.endsWith('.md')) {
-            setMessage({ type: 'error', text: 'Invalid file format. Please upload PDF or Text files.' });
+        // Validate file type (expanded for DOCX)
+        const validTypes = ['application/pdf', 'text/plain', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/markdown'];
+        const validExtensions = ['.pdf', '.txt', '.md', '.docx'];
+
+        const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
+
+        if (!validTypes.includes(file.type) && !validExtensions.includes(fileExtension)) {
+            setMessage({ type: 'error', text: 'Invalid file format. Please upload PDF, DOCX, or Text files.' });
             return;
         }
 
@@ -81,7 +86,7 @@ export default function FileUpload({ onUploadSuccess }) {
                     id="file-upload"
                     className="hidden"
                     onChange={handleFileSelect}
-                    accept=".pdf,.txt,.md"
+                    accept=".pdf,.txt,.md,.docx"
                     disabled={isUploading}
                 />
 
@@ -106,7 +111,7 @@ export default function FileUpload({ onUploadSuccess }) {
                         {isUploading ? 'UPLOADING...' : 'INITIATE DATA UPLOAD'}
                     </p>
                     <p className="text-xs text-cyber-text/50 uppercase tracking-widest">
-                        Drag & Drop or Click to Select
+                        Drag & Drop PDF, DOCX, TXT
                     </p>
                 </label>
             </div>
