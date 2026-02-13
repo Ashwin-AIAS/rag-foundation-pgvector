@@ -227,8 +227,69 @@ async def query_documents(
                 question=request.question
             )
         
-        # Step 4: Construct prompt with retrieved context
+        # Step 4: Construct prompt or Table Response
+        
+        # Check if we should return a table
+        # We return a table ONLY if:
+        # 1. We have retrieved chunks
+        # 2. visualising the data as a table is appropriate (heuristics: >50% chunks are CSV)
+        
+        csv_chunks = [c for c in retrieved_chunks if c.get("metadata", {}).get("file_type") == "csv"]
+        is_table_response = len(csv_chunks) > 0 and len(csv_chunks) >= len(retrieved_chunks) * 0.5
+        
         prompt_service = PromptService()
+        
+        if is_table_response:
+            # Construct Table Response
+            all_rows = []
+            seen_hashes = set()
+            
+            for chunk in csv_chunks:
+                row_data = chunk.get("metadata", {}).get("row_data", [])
+                if isinstance(row_data, list):
+                    for row in row_data:
+                        # Simple dedup based on string representation
+                        row_hash = str(sorted(row.items()))
+                        if row_hash not in seen_hashes:
+                            all_rows.append(row)
+                            seen_hashes.add(row_hash)
+            
+            # Determine columns from the first row (or union of all keys)
+            columns = []
+            if all_rows:
+                # Naive: use keys from first row
+                columns = list(all_rows[0].keys())
+                
+            # We still generate a summary text answer
+            prompt = prompt_service.construct_prompt(
+                retrieved_chunks=retrieved_chunks,
+                user_question=request.question
+            )
+            generation_service = GenerationService()
+            summary_answer = generation_service.generate(prompt)
+            
+            response_chunks = [
+                RetrievedChunk(
+                    chunk_text=chunk["chunk_text"],
+                    source_file=chunk["source_file"],
+                    chunk_index=chunk["chunk_index"],
+                    similarity_score=chunk["similarity_score"],
+                    metadata=chunk.get("metadata")
+                )
+                for chunk in retrieved_chunks
+            ]
+            
+            return QueryResponse(
+                answer=summary_answer, # Providing summary + structured data
+                retrieved_chunks=response_chunks,
+                num_chunks_retrieved=len(response_chunks),
+                question=request.question,
+                answer_type="table",
+                columns=columns,
+                rows=all_rows[:50] # Limit rows to avoid massive payloads
+            )
+
+        # Standard Text Response
         prompt = prompt_service.construct_prompt(
             retrieved_chunks=retrieved_chunks,
             user_question=request.question
@@ -254,7 +315,8 @@ async def query_documents(
             answer=answer,
             retrieved_chunks=response_chunks,
             num_chunks_retrieved=len(response_chunks),
-            question=request.question
+            question=request.question,
+            answer_type="text"
         )
     
     except ValueError as e:
