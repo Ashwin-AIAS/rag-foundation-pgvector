@@ -17,18 +17,23 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
-body {
+html,
+body,
+#root {
+  height: 100%;
+  width: 100%;
   margin: 0;
-  display: flex;
-  place-items: center;
+  padding: 0;
+  overflow: hidden;
+  /* Prevent body scroll, handle internally */
+}
+
+body {
   min-width: 320px;
-  min-height: 100vh;
   background: radial-gradient(circle at top center, #0a0f1c 0%, #05070d 100%);
-  overflow-x: hidden;
 }
 
 #root {
-  width: 100%;
-  margin: 0 auto;
-  text-align: center;
+  display: flex;
+  flex-direction: column;
 }
