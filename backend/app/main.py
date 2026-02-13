@@ -289,17 +289,54 @@ async def query_documents(
                 rows=all_rows[:50] # Limit rows to avoid massive payloads
             )
 
-        # Standard Text Response
+        # Standard Text Response (or Structured Listing)
+        
+        # Intent Detection: Listing
+        listing_keywords = ["list", "show", "display", "table", "jobs", "roles", "applications"]
+        is_listing_intent = any(kw in request.question.lower() for kw in listing_keywords)
+        
         prompt = prompt_service.construct_prompt(
             retrieved_chunks=retrieved_chunks,
-            user_question=request.question
+            user_question=request.question,
+            structured_mode=is_listing_intent
         )
         
         # Step 5: Generate answer
         generation_service = GenerationService()
-        answer = generation_service.generate(prompt)
+        raw_answer = generation_service.generate(prompt)
         
-        # Step 6: Format response
+        # Step 6: Parse structured response if needed
+        rows = None
+        columns = None
+        final_answer = raw_answer
+        answer_type = "text"
+        
+        if is_listing_intent:
+            try:
+                import json
+                # Clean potential markdown code blocks
+                clean_json = raw_answer.strip()
+                if clean_json.startswith("```json"):
+                    clean_json = clean_json[7:]
+                if clean_json.endswith("```"):
+                    clean_json = clean_json[:-3]
+                
+                parsed_data = json.loads(clean_json)
+                
+                if isinstance(parsed_data, list) and len(parsed_data) > 0:
+                    rows = parsed_data
+                    # Use keys from first object as columns
+                    columns = list(rows[0].keys())
+                    answer_type = "table"
+                    final_answer = "Here is the structured list you requested:"
+                else:
+                    # Fallback if structure is invalid
+                    logging.warning("Structured mode returned invalid JSON structure, falling back to text.")
+            except json.JSONDecodeError:
+                # Fallback to text
+                logging.warning("Failed to parse JSON in structured mode, falling back to text.")
+        
+        # Step 7: Format response
         response_chunks = [
             RetrievedChunk(
                 chunk_text=chunk["chunk_text"],
@@ -312,11 +349,13 @@ async def query_documents(
         ]
         
         return QueryResponse(
-            answer=answer,
+            answer=final_answer,
             retrieved_chunks=response_chunks,
             num_chunks_retrieved=len(response_chunks),
             question=request.question,
-            answer_type="text"
+            answer_type=answer_type,
+            columns=columns,
+            rows=rows
         )
     
     except ValueError as e:

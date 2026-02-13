@@ -16,7 +16,8 @@ class PromptService:
     def construct_prompt(
         self,
         retrieved_chunks: List[Dict[str, Any]],
-        user_question: str
+        user_question: str,
+        structured_mode: bool = False
     ) -> str:
         """
         Construct a complete prompt for the LLM.
@@ -24,6 +25,7 @@ class PromptService:
         Args:
             retrieved_chunks: List of retrieved document chunks with metadata
             user_question: The user's original question
+            structured_mode: Whether to enforce JSON output
             
         Returns:
             A complete prompt string with system instructions, context, and question
@@ -34,34 +36,44 @@ class PromptService:
             3. User's question
         """
         # Build the system instructions
-        system_prompt = self._build_system_instructions()
+        system_prompt = self._build_system_instructions(structured_mode)
         
         # Build the context section from retrieved chunks
         context_section = self._build_context_section(retrieved_chunks)
         
         # Build the user question section
-        question_section = self._build_question_section(user_question)
+        question_section = self._build_question_section(user_question, structured_mode)
         
         # Combine all sections
         complete_prompt = f"{system_prompt}\n\n{context_section}\n\n{question_section}"
         
         return complete_prompt
     
-    def _build_system_instructions(self) -> str:
+    def _build_system_instructions(self, structured_mode: bool = False) -> str:
         """
         Build the system instructions that enforce grounding constraints.
         
         Returns:
             System prompt string with explicit rules
         """
-        return """You are a helpful assistant that answers questions based ONLY on the provided context.
+        base_instructions = """You are a helpful assistant that answers questions based ONLY on the provided context.
 
 CRITICAL RULES:
 1. Use ONLY information from the context below
 2. If the context does not contain enough information to answer the question, you MUST respond with: "I cannot answer this question based on the available documents."
 3. Do not use any external knowledge or information not present in the context
 4. Do not make assumptions or inferences beyond what is explicitly stated in the context
-5. When providing an answer, cite the source document(s) used
+5. When providing an answer, cite the source document(s) used"""
+
+        if structured_mode:
+            return base_instructions + """
+
+6. OUTPUT FORMAT: strict JSON array of objects.
+7. Do NOT include markdown formatting (like ```json).
+8. Do NOT include any explanations or conversational text.
+9. Each object must represent one item found in the context."""
+        
+        return base_instructions + """
 
 6. If the question asks "how to" or for a procedure, format the answer as a clear, numbered list.
 7. Ensure all procedural steps are complete sentences and merged coherently from multiple chunks.
@@ -96,14 +108,30 @@ Your role is to be a faithful representative of the provided documents, not a ge
         
         return "\n".join(context_parts)
     
-    def _build_question_section(self, question: str) -> str:
+    def _build_question_section(self, question: str, structured_mode: bool = False) -> str:
         """
         Build the user question section.
         
         Args:
             question: The user's question
+            structured_mode: Whether to enforce JSON output
             
         Returns:
             Formatted question string
         """
+        if structured_mode:
+             return f"""USER QUESTION:
+{question}
+
+REQUIRED OUTPUT FORMAT (JSON Array):
+[
+  {{
+    "title": "Item Name",
+    "description": "Brief details from context",
+    "source_document": "Source filename"
+  }}
+]
+
+ANSWER:"""
+
         return f"USER QUESTION:\n{question}\n\nANSWER:"
