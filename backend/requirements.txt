@@ -13,4 +13,5 @@ langchain==0.1.9
 langchain-community==0.0.24
 pypdf==4.0.1
 python-multipart==0.0.6
-docx2txt==0.8  # For Word document support
+python-docx>=1.1.0
+unstructured>=0.12.0

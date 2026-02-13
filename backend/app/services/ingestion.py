@@ -4,8 +4,9 @@ from typing import List, Dict, Any
 from pathlib import Path
 from sqlalchemy.orm import Session
 
-from langchain_community.document_loaders import PyPDFLoader, TextLoader
-from langchain_community.document_loaders import Docx2txtLoader  # For Word documents
+import docx  # python-docx
+
+from langchain_community.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.schema import Document
 
@@ -19,7 +20,7 @@ class DocumentIngestionService:
     Service for ingesting documents into the RAG system.
     
     Handles the complete pipeline:
-    1. Load documents (PDF or text)
+    1. Load documents (PDF, DOCX, TXT)
     2. Split into chunks
     3. Generate embeddings
     4. Store in database
@@ -37,7 +38,7 @@ class DocumentIngestionService:
     
     def load_document(self, file_path: str, file_type: str) -> List[Document]:
         """
-        Load a document using appropriate LangChain loader.
+        Load a document using appropriate loader.
         
         Args:
             file_path: Path to the document file
@@ -48,15 +49,33 @@ class DocumentIngestionService:
         """
         if file_type == "pdf":
             loader = PyPDFLoader(file_path)
+            return loader.load()
+            
         elif file_type == "txt":
-            loader = TextLoader(file_path, encoding="utf-8")
+            try:
+                with open(file_path, "r", encoding="utf-8") as f:
+                    text = f.read()
+                return [Document(page_content=text, metadata={"source": file_path, "file_type": "txt"})]
+            except UnicodeDecodeError:
+                # Fallback to distinct encoding if utf-8 fails
+                with open(file_path, "r", encoding="latin-1") as f:
+                    text = f.read()
+                return [Document(page_content=text, metadata={"source": file_path, "file_type": "txt"})]
+                
         elif file_type == "docx":
-            loader = Docx2txtLoader(file_path)
+            try:
+                doc = docx.Document(file_path)
+                full_text = []
+                for paragraph in doc.paragraphs:
+                    full_text.append(paragraph.text)
+                text = "\n".join(full_text)
+                return [Document(page_content=text, metadata={"source": file_path, "file_type": "docx"})]
+            except Exception as e:
+                logging.error(f"Error loading DOCX file: {e}")
+                raise ValueError(f"Failed to load DOCX file: {str(e)}")
+                
         else:
             raise ValueError(f"Unsupported file type: {file_type}")
-        
-        documents = loader.load()
-        return documents
     
     def split_documents(self, documents: List[Document]) -> List[Document]:
         """
