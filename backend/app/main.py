@@ -115,7 +115,7 @@ async def ingest_document(
     
     if file_size_mb > settings.MAX_FILE_SIZE_MB:
         raise HTTPException(
-            status_code=400,
+            status_code=413,
             detail=f"File too large. Maximum size: {settings.MAX_FILE_SIZE_MB}MB"
         )
     
@@ -136,6 +136,9 @@ async def ingest_document(
         }
     
     except Exception as e:
+        # Check if it's a known value error (e.g. from unsupported file content)
+        if isinstance(e, ValueError):
+             raise HTTPException(status_code=400, detail=str(e))
         raise HTTPException(status_code=500, detail=f"Ingestion failed: {str(e)}")
     
     finally:

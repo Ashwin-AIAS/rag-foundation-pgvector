@@ -1,10 +1,9 @@
-import os
-import logging
-from typing import List, Dict, Any
-from pathlib import Path
-from sqlalchemy.orm import Session
-
 import docx  # python-docx
+import pandas as pd
+import pytesseract
+from pdf2image import convert_from_path
+from PIL import Image
+import io
 
 from langchain_community.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
@@ -20,7 +19,7 @@ class DocumentIngestionService:
     Service for ingesting documents into the RAG system.
     
     Handles the complete pipeline:
-    1. Load documents (PDF, DOCX, TXT)
+    1. Load documents (PDF, DOCX, TXT, MD, CSV)
     2. Split into chunks
     3. Generate embeddings
     4. Store in database
@@ -36,6 +35,20 @@ class DocumentIngestionService:
             separators=["\n\n", "\n", " ", ""]
         )
     
+    def _perform_ocr(self, file_path: str) -> str:
+        """Perform OCR on a PDF file using Tesseract."""
+        try:
+            logging.info(f"Starting OCR for {file_path}")
+            images = convert_from_path(file_path)
+            full_text = ""
+            for i, image in enumerate(images):
+                text = pytesseract.image_to_string(image)
+                full_text += text + "\n"
+            return full_text
+        except Exception as e:
+            logging.error(f"OCR failed: {e}")
+            raise ValueError(f"OCR processing failed: {str(e)}")
+
     def load_document(self, file_path: str, file_type: str) -> List[Document]:
         """
         Load a document using appropriate loader.
@@ -49,18 +62,27 @@ class DocumentIngestionService:
         """
         if file_type == "pdf":
             loader = PyPDFLoader(file_path)
-            return loader.load()
+            docs = loader.load()
             
-        elif file_type == "txt":
+            # Check for empty or very short text indicating scanned PDF
+            total_text_len = sum(len(d.page_content) for d in docs)
+            if total_text_len < 200:
+                logging.info(f"PDF text length {total_text_len} is too short. Triggering OCR fallback.")
+                ocr_text = self._perform_ocr(file_path)
+                return [Document(page_content=ocr_text, metadata={"source": file_path, "file_type": "pdf", "ingestion_method": "ocr"})]
+            
+            return docs
+            
+        elif file_type in ["txt", "md"]:
             try:
                 with open(file_path, "r", encoding="utf-8") as f:
                     text = f.read()
-                return [Document(page_content=text, metadata={"source": file_path, "file_type": "txt"})]
+                return [Document(page_content=text, metadata={"source": file_path, "file_type": file_type})]
             except UnicodeDecodeError:
                 # Fallback to distinct encoding if utf-8 fails
                 with open(file_path, "r", encoding="latin-1") as f:
                     text = f.read()
-                return [Document(page_content=text, metadata={"source": file_path, "file_type": "txt"})]
+                return [Document(page_content=text, metadata={"source": file_path, "file_type": file_type})]
                 
         elif file_type == "docx":
             try:
@@ -73,6 +95,29 @@ class DocumentIngestionService:
             except Exception as e:
                 logging.error(f"Error loading DOCX file: {e}")
                 raise ValueError(f"Failed to load DOCX file: {str(e)}")
+
+        elif file_type == "csv":
+            try:
+                df = pd.read_csv(file_path)
+                documents = []
+                # Process in chunks of rows to avoid huge single documents
+                row_chunk_size = 20
+                
+                for i in range(0, len(df), row_chunk_size):
+                    chunk_df = df.iloc[i:i+row_chunk_size]
+                    text_block = ""
+                    for _, row in chunk_df.iterrows():
+                        row_text = "\n".join([f"{col}: {val}" for col, val in row.items() if pd.notna(val)])
+                        text_block += row_text + "\n\n---\n\n"
+                    
+                    documents.append(Document(
+                        page_content=text_block, 
+                        metadata={"source": file_path, "file_type": "csv", "row_start": i}
+                    ))
+                return documents
+            except Exception as e:
+                logging.error(f"Error loading CSV file: {e}")
+                raise ValueError(f"Failed to load CSV file: {str(e)}")
                 
         else:
             raise ValueError(f"Unsupported file type: {file_type}")

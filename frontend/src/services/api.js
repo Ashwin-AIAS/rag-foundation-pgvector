@@ -1,3 +1,5 @@
+import axios from 'axios';
+
 // API service for backend communication
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
@@ -7,24 +9,39 @@ if (!API_BASE_URL) {
 
 /**
  * Upload a file to the backend ingestion endpoint
- * @param {File} file - The file to upload (PDF or TXT)
+ * @param {File} file - The file to upload
+ * @param {Function} onUploadProgress - Callback for upload progress
  * @returns {Promise<Object>} Upload result
  */
-export async function uploadFile(file) {
+export async function uploadFile(file, onUploadProgress) {
     const formData = new FormData();
     formData.append('file', file);
 
-    const response = await fetch(`${API_BASE_URL}/ingest`, {
-        method: 'POST',
-        body: formData,
-    });
-
-    if (!response.ok) {
-        const error = await response.json().catch(() => ({ detail: 'Upload failed' }));
-        throw new Error(error.detail || `HTTP ${response.status}`);
+    try {
+        const response = await axios.post(`${API_BASE_URL}/ingest`, formData, {
+            headers: {
+                'Content-Type': 'multipart/form-data',
+            },
+            onUploadProgress: (progressEvent) => {
+                if (onUploadProgress) {
+                    const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+                    onUploadProgress(percentCompleted);
+                }
+            }
+        });
+        return response.data;
+    } catch (error) {
+        if (error.response) {
+            // Server responded with a status code out of 2xx range
+            throw new Error(error.response.data.detail || `HTTP ${error.response.status}`);
+        } else if (error.request) {
+            // Request was made but no response received
+            throw new Error('No response from server. Please check your connection.');
+        } else {
+            // Something happened in setting up the request
+            throw new Error(error.message);
+        }
     }
-
-    return response.json();
 }
 
 /**
