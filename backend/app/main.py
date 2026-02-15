@@ -416,10 +416,17 @@ async def query_documents(
                 log_query(db, request.question, elapsed_ms, confidence,
                           request.selected_documents, len(reranked_chunks), rerank_succeeded)
                 
-                # Wrap stream to prepend confidence metadata as a first line
+                # Wrap stream to prepend confidence metadata and guarantee non-empty output
                 def stream_with_meta():
                     yield f"__CONFIDENCE__:{confidence}\n"
-                    yield from generation_service.stream_generate(prompt)
+                    yielded_any = False
+                    for token in generation_service.stream_generate(prompt):
+                        if token:
+                            yielded_any = True
+                            yield token
+                    if not yielded_any:
+                        logger.warning("Streaming generated zero tokens — emitting fallback")
+                        yield "No answer could be generated from the selected documents."
                 
                 return StreamingResponse(
                     stream_with_meta(),

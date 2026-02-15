@@ -156,18 +156,36 @@ function App() {
 
         if (controller.signal.aborted) return;
 
-        // Streaming success
+        // Streaming success — validate we got a real answer
+        const finalAnswer = (fullText || '').trim();
+        const FALLBACK_MSG =
+          "⚠️ No answer could be generated from the selected documents.\n\n" +
+          "Try:\n" +
+          "• Selecting more documents\n" +
+          "• Asking a more specific question\n" +
+          "• Checking document filter settings";
+
+        if (!finalAnswer || finalAnswer.length < 20) {
+          console.warn('Stream completed but answer was empty or too short.');
+          setCurrentAnswer(prev => ({
+            ...prev,
+            answer: FALLBACK_MSG,
+          }));
+        }
+
         setIsQuerying(false);
         setIsThinking(false);
         setIsStreaming(false);
+
+        const displayAnswer = (!finalAnswer || finalAnswer.length < 20) ? FALLBACK_MSG : fullText;
         const newHistoryItem = {
           id: Date.now().toString(),
           question: question,
-          answer: fullText,
+          answer: displayAnswer,
           retrieved_chunks: [],
           num_chunks_retrieved: 0,
           timestamp: new Date().toISOString(),
-          isRefusal: fullText.includes("cannot answer")
+          isRefusal: displayAnswer.includes("cannot answer") || displayAnswer.startsWith("⚠️")
         };
         setConversationHistory(prev => [newHistoryItem, ...prev].slice(0, 50));
         return;
