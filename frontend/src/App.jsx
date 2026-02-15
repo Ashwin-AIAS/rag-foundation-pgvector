@@ -5,6 +5,7 @@ import QuestionInput from './components/QuestionInput';
 import AnswerDisplay from './components/AnswerDisplay';
 import ConversationHistory from './components/ConversationHistory';
 import DocumentSelector from './components/DocumentSelector';
+import AdminAnalytics from './components/AdminAnalytics';
 import LoadingOverlay from './components/LoadingOverlay';
 import Toast from './components/Toast';
 
@@ -38,6 +39,7 @@ function App() {
   const [isLoadingDocs, setIsLoadingDocs] = useState(false);
   const [conversationHistory, setConversationHistory] = useState(() => loadHistory());
   const [selectedDocs, setSelectedDocs] = useState([]);
+  const [confidence, setConfidence] = useState(null);
   const [toast, setToast] = useState({ message: null, type: 'error' });
 
   // Ref for cancelling in-flight requests
@@ -116,6 +118,7 @@ function App() {
     setIsQuerying(true);
     setIsThinking(true);
     setIsStreaming(false);
+    setConfidence(null);
     setCurrentAnswer({
       answer: "",
       question: question,
@@ -147,7 +150,8 @@ function App() {
             }));
           },
           controller.signal,
-          docsFilter
+          docsFilter,
+          (score) => setConfidence(score)
         );
 
         if (controller.signal.aborted) return;
@@ -192,6 +196,7 @@ function App() {
       setIsQuerying(false);
       setIsThinking(false);
       setCurrentAnswer(result);
+      if (result.confidence != null) setConfidence(result.confidence);
 
       const newHistoryItem = {
         id: Date.now().toString(),
@@ -313,6 +318,7 @@ function App() {
                     isLoading={isQuerying}
                     isThinking={isThinking}
                     isStreaming={isStreaming}
+                    confidence={confidence}
                   />
                 </div>
               </div>
@@ -327,6 +333,7 @@ function App() {
             history={conversationHistory}
             onClearHistory={handleClearHistory}
           />
+          <AdminAnalytics />
         </aside>
 
       </div>

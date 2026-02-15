@@ -83,7 +83,7 @@ export async function queryDocuments(question, topK = null, selectedDocuments = 
  * @param {AbortSignal} signal - Optional AbortSignal for cancellation
  * @returns {Promise<string>} Full generated text
  */
-export async function streamQuery(question, onUpdate, signal = null, selectedDocuments = []) {
+export async function streamQuery(question, onUpdate, signal = null, selectedDocuments = [], onConfidence = null) {
     const body = { question };
     if (selectedDocuments && selectedDocuments.length > 0) {
         body.selected_documents = selectedDocuments;
@@ -114,6 +114,7 @@ export async function streamQuery(question, onUpdate, signal = null, selectedDoc
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let fullText = "";
+    let confidenceParsed = false;
 
     try {
         while (true) {
@@ -123,12 +124,33 @@ export async function streamQuery(question, onUpdate, signal = null, selectedDoc
             const chunk = decoder.decode(value, { stream: true });
             fullText += chunk;
 
+            // Parse the __CONFIDENCE__ metadata line from the first chunk
+            if (!confidenceParsed && fullText.includes('\n')) {
+                const firstNewline = fullText.indexOf('\n');
+                const firstLine = fullText.substring(0, firstNewline);
+                if (firstLine.startsWith('__CONFIDENCE__:')) {
+                    const score = parseInt(firstLine.split(':')[1], 10);
+                    if (onConfidence && !isNaN(score)) {
+                        onConfidence(score);
+                    }
+                    fullText = fullText.substring(firstNewline + 1);
+                    confidenceParsed = true;
+                } else {
+                    confidenceParsed = true; // no prefix, skip checking
+                }
+            }
+
             if (onUpdate) {
-                onUpdate(fullText);
+                // Strip the confidence prefix line if still present
+                let displayText = fullText;
+                if (!confidenceParsed && displayText.startsWith('__CONFIDENCE__:')) {
+                    // Haven't seen newline yet, don't show the prefix
+                    displayText = '';
+                }
+                onUpdate(displayText);
             }
         }
     } catch (error) {
-        // If aborted, cancel the reader and rethrow
         if (signal?.aborted) {
             try { reader.cancel(); } catch (_) { }
             throw new DOMException('Aborted', 'AbortError');
@@ -189,5 +211,17 @@ export async function submitFeedback(feedbackData) {
         throw new Error(error.detail || `HTTP ${response.status}`);
     }
 
+    return response.json();
+}
+
+/**
+ * Fetch usage analytics from the backend
+ * @returns {Promise<Object>} Analytics data
+ */
+export async function getAnalytics() {
+    const response = await fetch(`${API_BASE_URL}/analytics`);
+    if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+    }
     return response.json();
 }

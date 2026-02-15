@@ -1,37 +1,49 @@
+import logging
+import time
+import json
+
 from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, Query
 from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+from sqlalchemy import text as sa_text
 import tempfile
 import os
 from pathlib import Path
 
-from app.database import check_database_connection, check_pgvector_extension, get_db
+from app.database import check_database_connection, check_pgvector_extension, get_db, engine
 from app.config import settings
 from app.services.ingestion import DocumentIngestionService
 from app.services.embedding_service import EmbeddingService
 from app.services.retrieval_service import RetrievalService
 from app.services.prompt_service import PromptService
-from app.services.prompt_service import PromptService
 from app.services.generation_service import GenerationService
 from app.services.document_service import DocumentService
+from app.services.reranking_service import RerankingService
 from app.models.query import QueryRequest, QueryResponse, RetrievedChunk
 from app.models.feedback import FeedbackRequest, FeedbackResponse
-
 from app.models.document import Feedback, DocumentChunk
+
+logger = logging.getLogger(__name__)
+
+# ── Constants ────────────────────────────────────────────────
+MAX_TOP_K = 20           # Hard cap for top_k parameter
+RETRIEVAL_TOP_K = 15     # Broader initial retrieval for reranking
+RERANK_RETURN = 5        # Reranker returns this many chunks
+SLOW_QUERY_THRESHOLD = 3.0  # Seconds
 
 # Create FastAPI application
 app = FastAPI(
     title="RAG API",
     description="Retrieval-Augmented Generation API",
-    version="1.0.0"
+    version="2.0.0"
 )
 
-
-
-# Configure CORS for future frontend integration
-# In production, set ALLOWED_ORIGINS env var to the frontend URL
-allowed_origins_str = os.getenv("ALLOWED_ORIGINS", "https://rag-foundation-pgvector.vercel.app,http://localhost:5173,http://localhost:3000")
+# Configure CORS
+allowed_origins_str = os.getenv(
+    "ALLOWED_ORIGINS",
+    "https://rag-foundation-pgvector.vercel.app,http://localhost:5173,http://localhost:3000"
+)
 allowed_origins = [origin.strip() for origin in allowed_origins_str.split(",")]
 
 app.add_middleware(
@@ -42,28 +54,108 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# ── Startup: ensure query_logs table exists ──────────────────
+@app.on_event("startup")
+def create_query_logs_table():
+    """Create the query_logs analytics table if it doesn't exist."""
+    try:
+        with engine.connect() as conn:
+            conn.execute(sa_text("""
+                CREATE TABLE IF NOT EXISTS query_logs (
+                    id SERIAL PRIMARY KEY,
+                    question TEXT NOT NULL,
+                    response_time_ms INTEGER NOT NULL,
+                    confidence_score INTEGER NOT NULL DEFAULT 0,
+                    selected_documents TEXT,
+                    num_chunks INTEGER DEFAULT 0,
+                    rerank_used BOOLEAN DEFAULT FALSE,
+                    timestamp TIMESTAMPTZ DEFAULT NOW()
+                )
+            """))
+            conn.commit()
+        logger.info("query_logs table ready")
+    except Exception as e:
+        logger.error(f"Failed to create query_logs table: {e}")
+
+
+# ── Utility: confidence scoring ──────────────────────────────
+def compute_confidence(
+    chunks, rerank_succeeded: bool, min_expected: int = 3
+) -> int:
+    """
+    Compute a confidence score (0–100) from retrieval quality signals.
+
+    - Base = average similarity_score of top chunks * 100
+    - +10 if reranking succeeded (higher contextual precision)
+    - -15 if fewer than *min_expected* chunks retrieved
+    """
+    if not chunks:
+        return 0
+
+    avg_sim = sum(c["similarity_score"] for c in chunks) / len(chunks)
+    score = avg_sim * 100
+
+    if rerank_succeeded:
+        score += 10
+    if len(chunks) < min_expected:
+        score -= 15
+
+    return max(0, min(100, int(round(score))))
+
+
+# ── Utility: log query ───────────────────────────────────────
+def log_query(
+    db: Session,
+    question: str,
+    response_time_ms: int,
+    confidence: int,
+    selected_documents,
+    num_chunks: int,
+    rerank_used: bool,
+):
+    """Insert a row into query_logs."""
+    try:
+        docs_str = json.dumps(selected_documents) if selected_documents else None
+        db.execute(
+            sa_text("""
+                INSERT INTO query_logs
+                    (question, response_time_ms, confidence_score,
+                     selected_documents, num_chunks, rerank_used)
+                VALUES
+                    (:q, :rt, :cs, :sd, :nc, :ru)
+            """),
+            {
+                "q": question,
+                "rt": response_time_ms,
+                "cs": confidence,
+                "sd": docs_str,
+                "nc": num_chunks,
+                "ru": rerank_used,
+            },
+        )
+        db.commit()
+    except Exception as e:
+        logger.error(f"Failed to log query: {e}")
+        db.rollback()
+
+
+# ══════════════════════════════════════════════════════════════
+# Health / Config endpoints
+# ══════════════════════════════════════════════════════════════
+
 @app.get("/")
 async def root():
-    """Root endpoint"""
-    return {
-        "message": "RAG API is running",
-        "version": "1.0.0"
-    }
+    return {"message": "RAG API is running", "version": "2.0.0"}
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint"""
-    return {
-        "status": "healthy",
-        "service": "rag-api"
-    }
+    return {"status": "healthy", "service": "rag-api"}
 
 @app.get("/db-health")
 async def database_health():
-    """Check database connection and pgvector extension"""
     db_connected = check_database_connection()
     pgvector_enabled = check_pgvector_extension()
-    
     return {
         "database_connected": db_connected,
         "pgvector_enabled": pgvector_enabled,
@@ -72,7 +164,6 @@ async def database_health():
 
 @app.get("/config")
 async def get_config():
-    """Get non-sensitive configuration info"""
     return {
         "database_host": settings.POSTGRES_HOST,
         "database_port": settings.POSTGRES_PORT,
@@ -85,149 +176,146 @@ async def get_config():
     }
 
 
-# Document Ingestion Endpoints
+# ══════════════════════════════════════════════════════════════
+# Document Ingestion
+# ══════════════════════════════════════════════════════════════
 
 @app.post("/ingest")
 async def ingest_document(
     file: UploadFile = File(...),
     db: Session = Depends(get_db)
 ):
-    """
-    Upload and ingest a document (PDF or text file).
-    
-    The document will be:
-    1. Validated for file type and size
-    2. Split into chunks
-    3. Embedded using OpenAI
-    4. Stored in the database
-    """
-    # Validate file type
+    """Upload and ingest a document (PDF, text, CSV, etc.)."""
     file_extension = Path(file.filename).suffix.lower().lstrip('.')
+    
     if file_extension not in settings.SUPPORTED_FILE_TYPES:
         raise HTTPException(
             status_code=400,
-            detail=f"Unsupported file type. Supported types: {settings.SUPPORTED_FILE_TYPES}"
+            detail=f"Unsupported file type: .{file_extension}. Supported: {settings.SUPPORTED_FILE_TYPES}"
         )
     
-    # Validate file size
-    file.file.seek(0, 2)  # Seek to end
-    file_size_mb = file.file.tell() / (1024 * 1024)
-    file.file.seek(0)  # Reset to beginning
+    contents = await file.read()
+    file_size_mb = len(contents) / (1024 * 1024)
     
     if file_size_mb > settings.MAX_FILE_SIZE_MB:
         raise HTTPException(
-            status_code=413,
-            detail=f"File too large. Maximum size: {settings.MAX_FILE_SIZE_MB}MB"
+            status_code=400,
+            detail=f"File too large: {file_size_mb:.1f}MB. Maximum: {settings.MAX_FILE_SIZE_MB}MB"
         )
     
-    # Save uploaded file temporarily
-    with tempfile.NamedTemporaryFile(delete=False, suffix=f".{file_extension}") as tmp_file:
-        content = await file.read()
-        tmp_file.write(content)
-        tmp_file_path = tmp_file.name
-    
     try:
-        # Ingest the document
+        with tempfile.NamedTemporaryFile(
+            delete=False, 
+            suffix=f".{file_extension}",
+            dir=tempfile.gettempdir()
+        ) as tmp_file:
+            tmp_file.write(contents)
+            temp_path = tmp_file.name
+        
         ingestion_service = DocumentIngestionService(db)
-        # Use await as ingest_document is now async
-        result = await ingestion_service.ingest_document(tmp_file_path, file.filename)
+        result = ingestion_service.ingest(
+            file_path=temp_path,
+            filename=file.filename
+        )
         
         return {
-            "message": "Document ingested successfully",
-            **result
+            "message": f"Document '{file.filename}' ingested successfully",
+            "chunks_created": result["chunks_created"],
+            "filename": file.filename
         }
-    
+        
     except ValueError as e:
-        # Check if it's a known value error or duplicate
-        if "already exists" in str(e):
-             raise HTTPException(status_code=409, detail=str(e))
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Ingestion failed: {str(e)}")
-    
+        raise HTTPException(
+            status_code=500,
+            detail=f"Ingestion failed: {str(e)}"
+        )
     finally:
-        # Clean up temporary file
-        if os.path.exists(tmp_file_path):
-            os.unlink(tmp_file_path)
+        if 'temp_path' in locals() and os.path.exists(temp_path):
+            os.unlink(temp_path)
 
+
+# ══════════════════════════════════════════════════════════════
+# Document Management
+# ══════════════════════════════════════════════════════════════
 
 @app.get("/documents")
 async def list_documents(db: Session = Depends(get_db)):
-    """
-    List all ingested documents with statistics.
-    """
-    document_service = DocumentService(db)
-    documents = document_service.list_documents()
-    
-    return {
-        "documents": documents,
-        "total": len(documents)
-    }
-
+    """List all ingested documents."""
+    try:
+        doc_service = DocumentService(db)
+        documents = doc_service.list_documents()
+        return {"documents": documents, "total": len(documents)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed: {str(e)}")
 
 @app.delete("/documents/{filename}")
 async def delete_document(filename: str, db: Session = Depends(get_db)):
-    """
-    Delete all chunks for a specific document.
-    """
-    document_service = DocumentService(db)
-    deleted_count = document_service.delete_document(filename)
-    
-    if deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Document not found")
-    
-    return {
-        "message": "Document deleted successfully",
-        "filename": filename,
-        "chunks_deleted": deleted_count
-    }
+    """Delete a document and all its chunks."""
+    try:
+        doc_service = DocumentService(db)
+        result = doc_service.delete_document(filename)
+        if not result["success"]:
+            raise HTTPException(status_code=404, detail=result.get("message", "Not found"))
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Deletion failed: {str(e)}")
 
 
-# RAG Query Endpoint
+# ══════════════════════════════════════════════════════════════
+# RAG Query  (reranking + hybrid search + confidence + logging)
+# ══════════════════════════════════════════════════════════════
 
 @app.post("/query", response_model=QueryResponse)
 async def query_documents(
     request: QueryRequest,
-    stream: bool = Query(False), # Explicit query param to prevent 422 errors
+    stream: bool = Query(False),
     db: Session = Depends(get_db)
 ):
     """
     Query the RAG system with a question.
     
-    This endpoint executes the complete RAG workflow:
-    1. Convert question to embedding
-    2. Retrieve relevant document chunks
-    3. Construct grounded prompt
-    4. Generate answer using OpenAI
-    
-    The system enforces strict grounding constraints:
-    - Only uses information from retrieved documents
-    - Refuses to answer if context is insufficient
-    - Does not use external knowledge or make assumptions
+    Pipeline:
+    1. Embed question
+    2. Hybrid retrieval (vector 70% + keyword 30%), top_k = 15
+    3. LLM reranking → top 5
+    4. Construct prompt & generate answer
+    5. Compute confidence score
+    6. Log analytics
     """
-    # Validate question
     if not request.question or not request.question.strip():
         raise HTTPException(status_code=400, detail="Question cannot be empty")
     
+    start_time = time.time()
+    
     try:
-        # Step 1: Convert question to embedding
+        # Step 1: Embed question
         embedding_service = EmbeddingService()
         query_embedding = embedding_service.embed_query(request.question)
         
-        # Step 2: Retrieve relevant chunks
+        # Step 2: Hybrid retrieval (broader initial set for reranking)
         retrieval_service = RetrievalService(db)
-        top_k = request.top_k if request.top_k is not None else settings.TOP_K
+        initial_top_k = min(
+            request.top_k if request.top_k is not None else RETRIEVAL_TOP_K,
+            MAX_TOP_K
+        )
         retrieved_chunks = retrieval_service.retrieve(
             query_embedding=query_embedding,
-            top_k=top_k,
-            source_files=request.selected_documents
+            top_k=initial_top_k,
+            source_files=request.selected_documents,
+            user_question=request.question,
         )
         
         # Step 3: Check if we have sufficient context
         if len(retrieved_chunks) < settings.MIN_CHUNKS_REQUIRED:
-            # Not enough relevant context found
+            elapsed_ms = int((time.time() - start_time) * 1000)
+            log_query(db, request.question, elapsed_ms, 0,
+                      request.selected_documents, 0, False)
+            
             if stream:
-                # For streaming, we yield the refusal message
                 async def refuse_generator():
                     yield "I cannot answer this question based on the available documents."
                 return StreamingResponse(refuse_generator(), media_type="text/plain")
@@ -236,55 +324,49 @@ async def query_documents(
                 answer="I cannot answer this question based on the available documents.",
                 retrieved_chunks=[],
                 num_chunks_retrieved=0,
-                question=request.question
+                question=request.question,
+                confidence=0,
             )
         
-        # Step 4: Construct prompt or Table Response
+        # Step 4: LLM Reranking
+        reranker = RerankingService()
+        reranked_chunks, rerank_succeeded = reranker.rerank(
+            question=request.question,
+            chunks=retrieved_chunks,
+            top_n=RERANK_RETURN,
+        )
         
-        # Check if we should return a table
-        # We return a table ONLY if:
-        # 1. We have retrieved chunks
-        # 2. visualising the data as a table is appropriate (heuristics: >50% chunks are CSV)
+        # Step 5: Compute confidence
+        confidence = compute_confidence(reranked_chunks, rerank_succeeded)
         
-        csv_chunks = [c for c in retrieved_chunks if c.get("metadata", {}).get("file_type") == "csv"]
-        is_table_response = len(csv_chunks) > 0 and len(csv_chunks) >= len(retrieved_chunks) * 0.5
+        # Step 6: Construct prompt
+        # Check for table response
+        csv_chunks = [c for c in reranked_chunks if c.get("metadata", {}).get("file_type") == "csv"]
+        is_table_response = len(csv_chunks) > 0 and len(csv_chunks) >= len(reranked_chunks) * 0.5
         
         prompt_service = PromptService()
         
         if is_table_response:
-            # Construct Table Response
-            # ... (Existing table logic remains relatively same, likely no streaming for tables yet)
-            # For simplicity, if it's a table response, we ignore stream=True for the actual data structure part
-            # OR we just return the standard JSON response because streaming a JSON object is complex.
-            # Let's fallback to standard JSON for table responses even if stream=True is requested.
-            
             all_rows = []
             seen_hashes = set()
-            
             for chunk in csv_chunks:
                 row_data = chunk.get("metadata", {}).get("row_data", [])
                 if isinstance(row_data, list):
                     for row in row_data:
-                        # Simple dedup based on string representation
                         row_hash = str(sorted(row.items()))
                         if row_hash not in seen_hashes:
                             all_rows.append(row)
                             seen_hashes.add(row_hash)
             
-            # Determine columns from the first row (or union of all keys)
-            columns = []
-            if all_rows:
-                # Naive: use keys from first row
-                columns = list(all_rows[0].keys())
-                
-            # We still generate a summary text answer
+            columns = list(all_rows[0].keys()) if all_rows else []
+            
             prompt = prompt_service.construct_prompt(
-                retrieved_chunks=retrieved_chunks,
+                retrieved_chunks=reranked_chunks,
                 user_question=request.question
             )
             generation_service = GenerationService()
             summary_answer = generation_service.generate(prompt)
-             
+            
             response_chunks = [
                 RetrievedChunk(
                     chunk_text=chunk["chunk_text"],
@@ -293,55 +375,64 @@ async def query_documents(
                     similarity_score=chunk["similarity_score"],
                     metadata=chunk.get("metadata")
                 )
-                for chunk in retrieved_chunks
+                for chunk in reranked_chunks
             ]
             
-            # Return standard JSON response for tables
+            elapsed_ms = int((time.time() - start_time) * 1000)
+            if elapsed_ms > SLOW_QUERY_THRESHOLD * 1000:
+                logger.warning(f"SLOW QUERY ({elapsed_ms}ms): {request.question[:80]}")
+            log_query(db, request.question, elapsed_ms, confidence,
+                      request.selected_documents, len(response_chunks), rerank_succeeded)
+            
             return QueryResponse(
-                answer=summary_answer, # Providing summary + structured data
+                answer=summary_answer,
                 retrieved_chunks=response_chunks,
                 num_chunks_retrieved=len(response_chunks),
                 question=request.question,
+                confidence=confidence,
                 answer_type="table",
                 columns=columns,
-                rows=all_rows[:50] # Limit rows to avoid massive payloads
+                rows=all_rows[:50]
             )
-
-        # Standard Text Response (or Structured Listing)
         
-        # Intent Detection: Listing
+        # Standard Text Response (or Structured Listing)
         listing_keywords = ["list", "show", "display", "table", "jobs", "roles", "applications"]
         is_listing_intent = any(kw in request.question.lower() for kw in listing_keywords)
         
         prompt = prompt_service.construct_prompt(
-            retrieved_chunks=retrieved_chunks,
+            retrieved_chunks=reranked_chunks,
             user_question=request.question,
             structured_mode=is_listing_intent
         )
         
         generation_service = GenerationService()
-
+        
         # STREAMING LOGIC
         if stream:
             try:
-                # We need to ensure we can actually start the stream.
-                # If stream_generate immediately raises, we catch it here.
-                # However, once StreamingResponse starts, exceptions inside the generator
-                # will break the stream.
+                # For streaming we can't compute answer-level analytics easily,
+                # so we log what we know now
+                elapsed_ms = int((time.time() - start_time) * 1000)
+                log_query(db, request.question, elapsed_ms, confidence,
+                          request.selected_documents, len(reranked_chunks), rerank_succeeded)
+                
+                # Wrap stream to prepend confidence metadata as a first line
+                def stream_with_meta():
+                    yield f"__CONFIDENCE__:{confidence}\n"
+                    yield from generation_service.stream_generate(prompt)
+                
                 return StreamingResponse(
-                    generation_service.stream_generate(prompt),
+                    stream_with_meta(),
                     media_type="text/plain"
                 )
             except Exception as e:
                 print(f"Streaming setup failed: {e}")
                 logging.error(f"Streaming setup failed: {e}")
-                # Fallback to normal execution if immediate failure
-                pass 
-
-        # STANDARD LOGIC (Fallback or requested)
+                pass
+        
+        # STANDARD LOGIC
         raw_answer = generation_service.generate(prompt)
         
-        # Step 6: Parse structured response if needed
         rows = None
         columns = None
         final_answer = raw_answer
@@ -349,8 +440,6 @@ async def query_documents(
         
         if is_listing_intent:
             try:
-                import json
-                # Clean potential markdown code blocks
                 clean_json = raw_answer.strip()
                 if clean_json.startswith("```json"):
                     clean_json = clean_json[7:]
@@ -361,18 +450,14 @@ async def query_documents(
                 
                 if isinstance(parsed_data, list) and len(parsed_data) > 0:
                     rows = parsed_data
-                    # Use keys from first object as columns
                     columns = list(rows[0].keys())
                     answer_type = "table"
                     final_answer = "Here is the structured list you requested:"
                 else:
-                    # Fallback if structure is invalid
-                    logging.warning("Structured mode returned invalid JSON structure, falling back to text.")
+                    logging.warning("Structured mode returned invalid JSON, falling back to text.")
             except json.JSONDecodeError:
-                # Fallback to text
                 logging.warning("Failed to parse JSON in structured mode, falling back to text.")
         
-        # Step 7: Format response
         response_chunks = [
             RetrievedChunk(
                 chunk_text=chunk["chunk_text"],
@@ -381,43 +466,116 @@ async def query_documents(
                 similarity_score=chunk["similarity_score"],
                 metadata=chunk.get("metadata")
             )
-            for chunk in retrieved_chunks
+            for chunk in reranked_chunks
         ]
+        
+        elapsed_ms = int((time.time() - start_time) * 1000)
+        if elapsed_ms > SLOW_QUERY_THRESHOLD * 1000:
+            logger.warning(f"SLOW QUERY ({elapsed_ms}ms): {request.question[:80]}")
+        log_query(db, request.question, elapsed_ms, confidence,
+                  request.selected_documents, len(response_chunks), rerank_succeeded)
         
         return QueryResponse(
             answer=final_answer,
             retrieved_chunks=response_chunks,
             num_chunks_retrieved=len(response_chunks),
             question=request.question,
+            confidence=confidence,
             answer_type=answer_type,
             columns=columns,
             rows=rows
         )
     
     except ValueError as e:
-        # Validation errors
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        # Internal errors (embedding, retrieval, or generation failures)
         raise HTTPException(status_code=500, detail=f"Query failed: {str(e)}")
 
 
+# ══════════════════════════════════════════════════════════════
+# Analytics Endpoint
+# ══════════════════════════════════════════════════════════════
+
+@app.get("/analytics")
+async def get_analytics(db: Session = Depends(get_db)):
+    """Return aggregated analytics from query_logs."""
+    try:
+        summary = db.execute(sa_text("""
+            SELECT
+                COUNT(*) AS total_queries,
+                COALESCE(AVG(response_time_ms), 0) AS avg_response_time,
+                COALESCE(AVG(confidence_score), 0) AS avg_confidence,
+                COALESCE(MAX(response_time_ms), 0) AS max_response_time,
+                COALESCE(MIN(confidence_score), 0) AS min_confidence
+            FROM query_logs
+        """)).fetchone()
+        
+        # Most queried documents (from the selected_documents JSON column)
+        top_docs_result = db.execute(sa_text("""
+            SELECT selected_documents, COUNT(*) AS cnt
+            FROM query_logs
+            WHERE selected_documents IS NOT NULL
+            GROUP BY selected_documents
+            ORDER BY cnt DESC
+            LIMIT 5
+        """)).fetchall()
+        
+        # Recent queries
+        recent = db.execute(sa_text("""
+            SELECT question, response_time_ms, confidence_score, timestamp
+            FROM query_logs
+            ORDER BY timestamp DESC
+            LIMIT 20
+        """)).fetchall()
+        
+        # Per-day query counts (last 14 days)
+        daily = db.execute(sa_text("""
+            SELECT DATE(timestamp) AS day, COUNT(*) AS cnt
+            FROM query_logs
+            WHERE timestamp >= NOW() - INTERVAL '14 days'
+            GROUP BY DATE(timestamp)
+            ORDER BY day
+        """)).fetchall()
+        
+        return {
+            "total_queries": summary.total_queries if summary else 0,
+            "avg_response_time_ms": round(float(summary.avg_response_time), 1) if summary else 0,
+            "avg_confidence": round(float(summary.avg_confidence), 1) if summary else 0,
+            "max_response_time_ms": summary.max_response_time if summary else 0,
+            "min_confidence": summary.min_confidence if summary else 0,
+            "top_documents": [
+                {"documents": row.selected_documents, "count": row.cnt}
+                for row in top_docs_result
+            ],
+            "recent_queries": [
+                {
+                    "question": row.question,
+                    "response_time_ms": row.response_time_ms,
+                    "confidence": row.confidence_score,
+                    "timestamp": row.timestamp.isoformat() if row.timestamp else None,
+                }
+                for row in recent
+            ],
+            "daily_counts": [
+                {"day": str(row.day), "count": row.cnt}
+                for row in daily
+            ],
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Analytics failed: {str(e)}")
+
+
+# ══════════════════════════════════════════════════════════════
 # Feedback Endpoint
+# ══════════════════════════════════════════════════════════════
 
 @app.post("/feedback", response_model=FeedbackResponse)
 async def submit_feedback(
     request: FeedbackRequest,
     db: Session = Depends(get_db)
 ):
-    """
-    Submit user feedback on a generated answer.
-    
-    This endpoint stores user ratings (positive/negative) for analysis.
-    Feedback does NOT modify system behavior, retrieval, or generation.
-    It is purely for observational analysis and quality monitoring.
-    """
+    """Submit user feedback on a generated answer."""
     try:
-        # Create feedback record
         feedback_record = Feedback(
             question=request.question,
             answer=request.answer,
@@ -425,8 +583,6 @@ async def submit_feedback(
             num_chunks_retrieved=request.num_chunks_retrieved,
             timestamp=request.timestamp
         )
-        
-        # Store in database
         db.add(feedback_record)
         db.commit()
         db.refresh(feedback_record)
@@ -436,7 +592,6 @@ async def submit_feedback(
             feedback_id=feedback_record.id,
             message="Thank you for your feedback"
         )
-    
     except Exception as e:
         db.rollback()
         raise HTTPException(
@@ -444,10 +599,6 @@ async def submit_feedback(
             detail=f"Failed to store feedback: {str(e)}"
         )
 
-
-# Future endpoints:
-# - GET /documents/{filename}/chunks - Retrieve chunks for a specific document
-# - GET /feedback/stats - Get feedback statistics (for admin/analysis)
 
 @app.get("/debug/chunks-count")
 def chunks_count(db: Session = Depends(get_db)):

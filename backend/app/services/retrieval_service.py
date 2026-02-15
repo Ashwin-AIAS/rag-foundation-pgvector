@@ -1,4 +1,4 @@
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app.config import settings
@@ -6,19 +6,13 @@ from app.config import settings
 
 class RetrievalService:
     """
-    Service for retrieving relevant document chunks using vector similarity search.
+    Service for retrieving relevant document chunks using hybrid search.
     
-    Uses PostgreSQL's pgvector extension to perform efficient cosine similarity
-    search against stored document embeddings.
+    Combines pgvector cosine similarity (70%) with PostgreSQL full-text
+    keyword search (30%) for more robust retrieval.
     """
     
     def __init__(self, db: Session):
-        """
-        Initialize the retrieval service.
-        
-        Args:
-            db: SQLAlchemy database session
-        """
         self.db = db
     
     def retrieve(
@@ -26,48 +20,37 @@ class RetrievalService:
         query_embedding: List[float],
         top_k: int = None,
         similarity_threshold: float = None,
-        source_files: List[str] = None
+        source_files: List[str] = None,
+        user_question: str = None,
     ) -> List[Dict[str, Any]]:
         """
-        Retrieve the most relevant document chunks for a query embedding.
+        Hybrid retrieval: vector similarity + keyword full-text search.
+        
+        final_score = 0.7 * vector_score + 0.3 * keyword_score
         
         Args:
-            query_embedding: The query vector (1536 dimensions)
-            top_k: Number of chunks to retrieve (defaults to settings.TOP_K)
-            similarity_threshold: Minimum similarity score (defaults to settings.SIMILARITY_THRESHOLD)
-            source_files: Optional list of source filenames to restrict retrieval to
-            
-        Returns:
-            List of dictionaries containing:
-                - chunk_text: The text content
-                - source_file: Original document filename
-                - chunk_index: Position in the original document
-                - metadata: Additional metadata (JSONB)
-                - similarity_score: Cosine similarity score (0-1)
-                
-        Note:
-            Results are ordered by similarity (highest first).
-            Only chunks meeting the similarity threshold are returned.
+            query_embedding: The query vector
+            top_k: Number of chunks to retrieve
+            similarity_threshold: Minimum vector similarity score
+            source_files: Optional source file filter
+            user_question: Raw question text for keyword matching
         """
-        # Use defaults from settings if not provided
         if top_k is None:
             top_k = settings.TOP_K
         if similarity_threshold is None:
             similarity_threshold = settings.SIMILARITY_THRESHOLD
         
-        # Convert embedding list to PostgreSQL vector format
         embedding_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
         
-        # Build query with optional source_file filter
+        # --- Build WHERE clauses ---
         where_clauses = ["1 - (embedding <=> :query_embedding) >= :threshold"]
-        params = {
+        params: Dict[str, Any] = {
             "query_embedding": embedding_str,
             "threshold": similarity_threshold,
-            "limit": top_k
+            "limit": top_k,
         }
         
         if source_files and len(source_files) > 0:
-            # Build parameterized IN clause
             file_params = {}
             file_placeholders = []
             for i, sf in enumerate(source_files):
@@ -79,23 +62,57 @@ class RetrievalService:
         
         where_sql = " AND ".join(where_clauses)
         
-        query = text(f"""
-            SELECT 
-                chunk_text,
-                source_file,
-                chunk_index,
-                chunk_metadata,
-                1 - (embedding <=> :query_embedding) AS similarity_score
-            FROM document_chunks
-            WHERE {where_sql}
-            ORDER BY embedding <=> :query_embedding
-            LIMIT :limit
-        """)
+        # --- Choose between hybrid or vector-only ---
+        use_keyword = bool(user_question and user_question.strip())
+        
+        if use_keyword:
+            params["query_text"] = user_question.strip()
+            query = text(f"""
+                SELECT 
+                    chunk_text,
+                    source_file,
+                    chunk_index,
+                    chunk_metadata,
+                    1 - (embedding <=> :query_embedding) AS vector_score,
+                    COALESCE(
+                        ts_rank(
+                            to_tsvector('english', chunk_text),
+                            plainto_tsquery('english', :query_text)
+                        ),
+                        0
+                    ) AS keyword_score,
+                    (0.7 * (1 - (embedding <=> :query_embedding)))
+                    + (0.3 * COALESCE(
+                        ts_rank(
+                            to_tsvector('english', chunk_text),
+                            plainto_tsquery('english', :query_text)
+                        ),
+                        0
+                    )) AS final_score
+                FROM document_chunks
+                WHERE {where_sql}
+                ORDER BY final_score DESC
+                LIMIT :limit
+            """)
+        else:
+            query = text(f"""
+                SELECT 
+                    chunk_text,
+                    source_file,
+                    chunk_index,
+                    chunk_metadata,
+                    1 - (embedding <=> :query_embedding) AS vector_score,
+                    0 AS keyword_score,
+                    1 - (embedding <=> :query_embedding) AS final_score
+                FROM document_chunks
+                WHERE {where_sql}
+                ORDER BY final_score DESC
+                LIMIT :limit
+            """)
         
         try:
             result = self.db.execute(query, params)
             
-            # Convert result rows to dictionaries
             chunks = []
             for row in result:
                 chunks.append({
@@ -103,10 +120,13 @@ class RetrievalService:
                     "source_file": row.source_file,
                     "chunk_index": row.chunk_index,
                     "metadata": row.chunk_metadata,
-                    "similarity_score": float(row.similarity_score)
+                    "similarity_score": float(row.vector_score),
+                    "keyword_score": float(row.keyword_score),
+                    "final_score": float(row.final_score),
                 })
             
             return chunks
             
         except Exception as e:
             raise Exception(f"Retrieval failed: {str(e)}")
+
