@@ -63,7 +63,20 @@ CRITICAL RULES:
 2. If the context does not contain enough information to answer the question, you MUST respond with: "I cannot answer this question based on the available documents."
 3. Do not use any external knowledge or information not present in the context
 4. Do not make assumptions or inferences beyond what is explicitly stated in the context
-5. When providing an answer, cite the source document(s) used"""
+5. When providing an answer, cite the source document(s) used
+
+FORMATTING RULES:
+You must format the answer in structured Markdown.
+Use:
+- Headings (##) for main sections
+- Bullet points for lists
+- Numbered steps when describing procedures
+- Tables if data is tabular or structured
+- Clear spacing between sections
+- Bold text for key terms
+
+Do NOT return raw text blocks.
+Return well-formatted Markdown."""
 
         if structured_mode:
             return base_instructions + """

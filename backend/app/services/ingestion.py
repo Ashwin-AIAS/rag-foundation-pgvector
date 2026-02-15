@@ -167,61 +167,7 @@ class DocumentIngestionService:
         embeddings = self.embeddings.embed_documents(texts)
         return embeddings
     
-    def store_chunks(
-        self, 
-        chunks: List[Document], 
-        embeddings: List[List[float]], 
-        source_filename: str
-    ) -> int:
-        """
-        Store document chunks and embeddings in the database.
-        
-        Args:
-            chunks: List of LangChain Document objects
-            embeddings: List of embedding vectors
-            source_filename: Original filename
-            
-        Returns:
-            Number of chunks stored
-        """
-
-        try:
-            # check if document exists and delete if so (idempotency)
-            existing_chunks = self.db.query(DocumentChunk).filter(
-                DocumentChunk.source_file == source_filename
-            ).count()
-            
-            if existing_chunks > 0:
-                logging.info(f"Replacing existing document '{source_filename}' with {len(chunks)} new chunks. "
-                             f"Deleting {existing_chunks} old chunks.")
-                self.db.query(DocumentChunk).filter(
-                    DocumentChunk.source_file == source_filename
-                ).delete()
-
-            for idx, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
-                # Extract metadata from the chunk
-                metadata = chunk.metadata.copy()
-                metadata["original_filename"] = source_filename
-                
-                # Create database record
-                db_chunk = DocumentChunk(
-                    source_file=source_filename,
-                    chunk_index=idx,
-                    chunk_text=chunk.page_content,
-                    embedding=embedding,
-                    chunk_metadata=metadata
-                )
-                
-                self.db.add(db_chunk)
-            
-            self.db.commit()
-            return len(chunks)
-        except Exception as e:
-            self.db.rollback()
-            logging.error(f"Failed to store chunks for {source_filename}: {e}")
-            raise e
-    
-    def ingest_document(self, file_path: str, filename: str) -> Dict[str, Any]:
+    async def ingest_document(self, file_path: str, filename: str) -> Dict[str, Any]:
         """
         Complete ingestion pipeline for a document.
         
@@ -232,21 +178,57 @@ class DocumentIngestionService:
         Returns:
             Dictionary with ingestion summary
         """
+        # 1. Duplicate Detection
+        existing = self.db.query(DocumentChunk).filter(
+            DocumentChunk.source_file == filename
+        ).first()
+        
+        if existing:
+            logging.warning(f"Duplicate document detected: {filename}")
+            # Raise a specific exception or return a status that can be handled as 409
+            # Since this is a service method, we'll raise a ValueError that the controller can catch
+            # Or better, we define a custom DuplicateDocumentError in the controller or here.
+            # For now, we'll use ValueError with a specific message.
+            raise ValueError(f"Document '{filename}' already exists.")
+
         # Determine file type
         file_extension = Path(filename).suffix.lower().lstrip('.')
         
-        # Load document
+        # 2. Load document (Blocking I/O, so we might want to run in thread if huge, 
+        # but for simplicity and since libraries are sync, we call directly or could use run_in_executor)
+        # For this step, standard call is fine as we are in an async def but doing blocking calls.
+        # Ideally: documents = await run_in_threadpool(self.load_document, file_path, file_extension)
         documents = self.load_document(file_path, file_extension)
         
-        # Split into chunks
+        if not documents:
+            return {"filename": filename, "status": "empty", "num_chunks": 0}
+
+        # 3. Split into chunks
         chunks = self.split_documents(documents)
+        logging.info(f"Split {filename} into {len(chunks)} chunks.")
         
-        # Generate embeddings
+        # 4. Generate embeddings in batches
         texts = [chunk.page_content for chunk in chunks]
-        embeddings = self.generate_embeddings(texts)
+        embeddings = []
         
-        # Store in database
+        # We'll batch here if the service doesn't handled it, but we updated the service to take a list.
+        # We will log progress.
+        total_chunks = len(texts)
+        batch_size = 20
+        
+        for i in range(0, total_chunks, batch_size):
+            batch_texts = texts[i:i + batch_size]
+            logging.info(f"Embedding batch {i//batch_size + 1}/{(total_chunks + batch_size - 1)//batch_size} for {filename}")
+            
+            # Call embedding service (still sync for now as per library, but batched)
+            batch_embeddings = self.embeddings.embed_documents(batch_texts)
+            embeddings.extend(batch_embeddings)
+
+        # 5. Store in database (Bulk insert)
+        logging.info(f"Storing {len(chunks)} chunks for {filename}...")
         num_chunks = self.store_chunks(chunks, embeddings, filename)
+        
+        logging.info(f"Ingestion complete for {filename}")
         
         return {
             "filename": filename,
@@ -254,5 +236,43 @@ class DocumentIngestionService:
             "num_pages": len(documents),
             "status": "success"
         }
+
+    def store_chunks(
+        self, 
+        chunks: List[Document], 
+        embeddings: List[List[float]], 
+        source_filename: str
+    ) -> int:
+        """
+        Store document chunks and embeddings in the database using bulk insert.
+        """
+        try:
+            # We already checked for duplicates in ingest_document, so we proceed to insert.
+            # However, if we want to be safe against race conditions, we could accept that.
+            # But the requirement says "Commit once per document".
+            
+            db_chunks = []
+            for idx, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
+                metadata = chunk.metadata.copy()
+                metadata["original_filename"] = source_filename
+                
+                db_chunk = DocumentChunk(
+                    source_file=source_filename,
+                    chunk_index=idx,
+                    chunk_text=chunk.page_content,
+                    embedding=embedding,
+                    chunk_metadata=metadata
+                )
+                db_chunks.append(db_chunk)
+            
+            # Bulk save
+            self.db.add_all(db_chunks)
+            self.db.commit()
+            
+            return len(db_chunks)
+        except Exception as e:
+            self.db.rollback()
+            logging.error(f"Failed to store chunks for {source_filename}: {e}")
+            raise e
     
 

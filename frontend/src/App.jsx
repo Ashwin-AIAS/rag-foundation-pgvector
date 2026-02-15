@@ -4,18 +4,28 @@ import FileUpload from './components/FileUpload';
 import QuestionInput from './components/QuestionInput';
 import AnswerDisplay from './components/AnswerDisplay';
 import ConversationHistory from './components/ConversationHistory';
+import LoadingOverlay from './components/LoadingOverlay';
+import Toast from './components/Toast';
 
 function App() {
   const [uploadedFiles, setUploadedFiles] = useState([]);
   const [currentAnswer, setCurrentAnswer] = useState(null);
   const [isQuerying, setIsQuerying] = useState(false);
   const [isLoadingDocs, setIsLoadingDocs] = useState(false);
-  const [deleteError, setDeleteError] = useState(null);
   const [conversationHistory, setConversationHistory] = useState([]);
+  const [toast, setToast] = useState({ message: null, type: 'error' });
 
   useEffect(() => {
     fetchDocuments();
   }, []);
+
+  const showToast = (message, type = 'error') => {
+    setToast({ message, type });
+  };
+
+  const closeToast = () => {
+    setToast({ ...toast, message: null });
+  };
 
   const fetchDocuments = async () => {
     setIsLoadingDocs(true);
@@ -25,6 +35,7 @@ function App() {
       setUploadedFiles(filenames);
     } catch (error) {
       console.error("Failed to fetch documents:", error);
+      showToast("Failed to connect to backend", 'error');
     } finally {
       setIsLoadingDocs(false);
     }
@@ -32,6 +43,7 @@ function App() {
 
   const handleUploadSuccess = () => {
     fetchDocuments();
+    showToast("Document ingested successfully", 'success');
   };
 
   const handleDelete = async (filename) => {
@@ -39,14 +51,13 @@ function App() {
       return;
     }
 
-    setDeleteError(null);
     try {
       await deleteDocument(filename);
       setUploadedFiles(prev => prev.filter(f => f !== filename));
+      showToast(`Deleted ${filename}`, 'success');
     } catch (error) {
       console.error("Failed to delete document:", error);
-      setDeleteError(`Failed to delete ${filename}`);
-      alert(`Error: ${error.message}`);
+      showToast(`Failed to delete ${filename}: ${error.message}`, 'error');
     }
   };
 
@@ -80,6 +91,13 @@ function App() {
 
   return (
     <div className="h-full w-full flex flex-col text-cyber-text font-sans selection:bg-cyber-primary selection:text-cyber-darker overflow-hidden">
+      <LoadingOverlay isLoading={isQuerying} />
+      <Toast
+        message={toast.message}
+        type={toast.type}
+        onClose={closeToast}
+      />
+
       {/* Background Effects */}
       <div className="fixed inset-0 pointer-events-none z-[-1]">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[500px] bg-cyber-primary/10 rounded-full blur-[120px] opacity-20"></div>

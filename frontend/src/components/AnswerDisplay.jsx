@@ -1,4 +1,6 @@
 import FeedbackButtons from './FeedbackButtons';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 // Removed AnswerDisplay.css import
 
 export default function AnswerDisplay({ answer, isLoading }) {
@@ -31,8 +33,10 @@ export default function AnswerDisplay({ answer, isLoading }) {
         return (
             <div className="answer-display">
                 <h2>Generated Analysis</h2>
-                <div className="answer-content mb-4 text-cyber-text/80 text-sm">
-                    {answer.answer}
+                <div className="answer-content mb-4 text-cyber-text/80 text-sm prose prose-invert max-w-none">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {answer.answer}
+                    </ReactMarkdown>
                 </div>
 
                 <div className="overflow-x-auto rounded-lg border border-cyber-primary/20 shadow-[0_0_15px_rgba(0,212,255,0.05)] custom-scrollbar max-h-[500px]">
@@ -76,8 +80,10 @@ export default function AnswerDisplay({ answer, isLoading }) {
     return (
         <div className="answer-display">
             <h2>Answer</h2>
-            <div className="answer-content">
-                {answer.answer}
+            <div className="answer-content prose prose-invert max-w-none prose-p:text-cyber-text/80 prose-headings:text-cyber-primary prose-a:text-cyber-secondary prose-strong:text-cyber-primary/90 prose-code:text-cyber-secondary prose-pre:bg-cyber-darker/50 prose-pre:border prose-pre:border-white/10">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {answer.answer}
+                </ReactMarkdown>
             </div>
             {/* Feedback buttons - shown for all answers including refusals */}
             <FeedbackButtons

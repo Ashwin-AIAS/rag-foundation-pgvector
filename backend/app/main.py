@@ -128,17 +128,20 @@ async def ingest_document(
     try:
         # Ingest the document
         ingestion_service = DocumentIngestionService(db)
-        result = ingestion_service.ingest_document(tmp_file_path, file.filename)
+        # Use await as ingest_document is now async
+        result = await ingestion_service.ingest_document(tmp_file_path, file.filename)
         
         return {
             "message": "Document ingested successfully",
             **result
         }
     
+    except ValueError as e:
+        # Check if it's a known value error or duplicate
+        if "already exists" in str(e):
+             raise HTTPException(status_code=409, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        # Check if it's a known value error (e.g. from unsupported file content)
-        if isinstance(e, ValueError):
-             raise HTTPException(status_code=400, detail=str(e))
         raise HTTPException(status_code=500, detail=f"Ingestion failed: {str(e)}")
     
     finally:

@@ -16,7 +16,7 @@ class GenerationService:
         # Generation models need 'models/' prefix
         model_name = f"models/{settings.GEMINI_MODEL}"
         self.model = genai.GenerativeModel(model_name)
-        self.temperature = settings.GENERATION_TEMPERATURE
+        self.temperature = 0.2 # Structured but stable
         self.max_tokens = settings.GENERATION_MAX_TOKENS
     
     def generate(self, prompt: str) -> str:

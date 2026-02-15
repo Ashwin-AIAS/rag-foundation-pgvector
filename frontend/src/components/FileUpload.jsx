@@ -17,6 +17,8 @@ export default function FileUpload({ onUploadSuccess }) {
         setIsDragging(false);
     }, []);
 
+    const [uploadProgress, setUploadProgress] = useState(0);
+
     const processFile = async (file) => {
         if (!file) return;
 
@@ -32,17 +34,21 @@ export default function FileUpload({ onUploadSuccess }) {
         }
 
         setIsUploading(true);
+        setUploadProgress(0);
         setMessage(null);
 
         try {
-            const response = await uploadFile(file);
+            await uploadFile(file, (percent) => {
+                setUploadProgress(percent);
+            });
             setMessage({ type: 'success', text: `Systems upgraded: ${file.name} integrated successfully.` });
             if (onUploadSuccess) onUploadSuccess();
         } catch (error) {
             console.error('Upload failed:', error);
-            setMessage({ type: 'error', text: 'Upload failed. Transmission interrupted.' });
+            setMessage({ type: 'error', text: error.message || 'Upload failed. Transmission interrupted.' });
         } finally {
             setIsUploading(false);
+            setUploadProgress(0);
         }
     };
 
@@ -115,6 +121,23 @@ export default function FileUpload({ onUploadSuccess }) {
                     </p>
                 </label>
             </div>
+
+            {isUploading && (
+                <div className="mt-4 px-2">
+                    <div className="flex justify-between text-xs text-cyber-primary mb-1">
+                        <span>UPLOADING</span>
+                        <span>{uploadProgress}%</span>
+                    </div>
+                    <div className="w-full h-1 bg-cyber-darker rounded-full overflow-hidden border border-cyber-primary/20">
+                        <motion.div
+                            className="h-full bg-cyber-primary shadow-[0_0_10px_rgba(0,212,255,0.5)]"
+                            initial={{ width: 0 }}
+                            animate={{ width: `${uploadProgress}%` }}
+                            transition={{ duration: 0.1 }}
+                        />
+                    </div>
+                </div>
+            )}
 
             {message && (
                 <motion.div
