@@ -33,7 +33,7 @@ export default function AnswerDisplay({ answer, isLoading }) {
         return (
             <div className="answer-display">
                 <h2>Generated Analysis</h2>
-                <div className="answer-content mb-4 text-cyber-text/80 text-sm prose prose-invert max-w-none">
+                <div className="answer-markdown mb-4">
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>
                         {answer.answer}
                     </ReactMarkdown>
@@ -80,7 +80,7 @@ export default function AnswerDisplay({ answer, isLoading }) {
     return (
         <div className="answer-display">
             <h2>Answer</h2>
-            <div className="answer-content prose prose-invert max-w-none prose-p:text-cyber-text/80 prose-headings:text-cyber-primary prose-a:text-cyber-secondary prose-strong:text-cyber-primary/90 prose-code:text-cyber-secondary prose-pre:bg-cyber-darker/50 prose-pre:border prose-pre:border-white/10">
+            <div className="answer-markdown">
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>
                     {answer.answer}
                 </ReactMarkdown>

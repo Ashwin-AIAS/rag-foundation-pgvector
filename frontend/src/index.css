@@ -38,3 +38,148 @@ body {
   display: flex;
   flex-direction: column;
 }
+
+/* ── Markdown Answer Styles ────────────────────────────────── */
+
+.answer-markdown {
+  line-height: 1.85;
+  font-size: 15px;
+  color: #e6f1ff;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.answer-markdown h1,
+.answer-markdown h2,
+.answer-markdown h3 {
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+  font-weight: 600;
+  color: #4fc3f7;
+  letter-spacing: 0.02em;
+}
+
+.answer-markdown h1 {
+  font-size: 1.4rem;
+}
+
+.answer-markdown h2 {
+  font-size: 1.2rem;
+}
+
+.answer-markdown h3 {
+  font-size: 1.05rem;
+}
+
+.answer-markdown p {
+  margin-bottom: 1rem;
+}
+
+.answer-markdown ul,
+.answer-markdown ol {
+  margin-left: 1.5rem;
+  margin-bottom: 1rem;
+  padding-left: 0.5rem;
+}
+
+.answer-markdown ul {
+  list-style-type: disc;
+}
+
+.answer-markdown ol {
+  list-style-type: decimal;
+}
+
+.answer-markdown li {
+  margin-bottom: 0.45rem;
+}
+
+.answer-markdown li::marker {
+  color: #4fc3f7;
+}
+
+.answer-markdown strong {
+  color: #90caf9;
+  font-weight: 600;
+}
+
+.answer-markdown em {
+  color: #b0bec5;
+  font-style: italic;
+}
+
+.answer-markdown a {
+  color: #00d4ff;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.answer-markdown a:hover {
+  color: #4fc3f7;
+}
+
+.answer-markdown code {
+  background: rgba(0, 212, 255, 0.08);
+  color: #00d4ff;
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+  font-size: 0.9em;
+  font-family: 'Fira Code', 'Cascadia Code', monospace;
+}
+
+.answer-markdown pre {
+  background: rgba(5, 7, 13, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  overflow-x: auto;
+}
+
+.answer-markdown pre code {
+  background: transparent;
+  padding: 0;
+  color: #e6f1ff;
+}
+
+.answer-markdown blockquote {
+  border-left: 3px solid #4fc3f7;
+  margin: 1rem 0;
+  padding: 0.5rem 1rem;
+  background: rgba(0, 212, 255, 0.04);
+  border-radius: 0 6px 6px 0;
+  color: #b0bec5;
+}
+
+.answer-markdown table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 1rem;
+  font-size: 0.9em;
+}
+
+.answer-markdown th {
+  background: rgba(0, 212, 255, 0.08);
+  color: #4fc3f7;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  padding: 0.6rem 0.8rem;
+  border-bottom: 1px solid rgba(0, 212, 255, 0.2);
+  text-align: left;
+}
+
+.answer-markdown td {
+  padding: 0.5rem 0.8rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.answer-markdown tr:hover td {
+  background: rgba(0, 212, 255, 0.03);
+}
+
+.answer-markdown hr {
+  border: none;
+  border-top: 1px solid rgba(0, 212, 255, 0.15);
+  margin: 1.5rem 0;
+}
