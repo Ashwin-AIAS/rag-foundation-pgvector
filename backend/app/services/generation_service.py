@@ -80,12 +80,23 @@ class GenerationService:
                 stream=True
             )
             
+            token_count = 0
             for chunk in response:
-                if hasattr(chunk, "text") and chunk.text:
-                    yield chunk.text
+                try:
+                    if hasattr(chunk, "text") and chunk.text:
+                        token_count += 1
+                        yield chunk.text
+                except ValueError as ve:
+                    # Safety filter can cause ValueError when accessing .text
+                    logging.warning(f"Chunk blocked by safety filter: {ve}")
+                    continue
+            
+            logging.info(f"Stream completed: {token_count} tokens yielded")
+            
+            # Log prompt feedback if the response was blocked
+            if hasattr(response, 'prompt_feedback') and response.prompt_feedback:
+                logging.info(f"Prompt feedback: {response.prompt_feedback}")
                     
         except Exception as e:
             logging.error(f"Streaming generation failed: {str(e)}")
-            # In a real stream, we might want to yield a specific error marker, 
-            # but for now we'll just log it. The client will see the stream end.
-            raise e # Reraise to let caller handle it if possible, or just stop yielding
+            yield f"Error generating answer: {str(e)}"

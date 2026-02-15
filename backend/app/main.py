@@ -428,6 +428,7 @@ async def query_documents(
         # STREAMING LOGIC
         if stream:
             try:
+                logger.info(f"Starting stream — prompt length: {len(prompt)} chars")
                 # For streaming we can't compute answer-level analytics easily,
                 # so we log what we know now
                 elapsed_ms = int((time.time() - start_time) * 1000)
@@ -451,9 +452,8 @@ async def query_documents(
                     media_type="text/plain"
                 )
             except Exception as e:
-                print(f"Streaming setup failed: {e}")
-                logging.error(f"Streaming setup failed: {e}")
-                pass
+                logger.error(f"Streaming setup failed, falling back to standard: {e}")
+                # Fall through to standard (non-streaming) logic below
         
         # STANDARD LOGIC
         raw_answer = generation_service.generate(prompt)
