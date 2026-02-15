@@ -219,7 +219,8 @@ async def query_documents(
         top_k = request.top_k if request.top_k is not None else settings.TOP_K
         retrieved_chunks = retrieval_service.retrieve(
             query_embedding=query_embedding,
-            top_k=top_k
+            top_k=top_k,
+            source_files=request.selected_documents
         )
         
         # Step 3: Check if we have sufficient context

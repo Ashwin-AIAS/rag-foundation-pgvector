@@ -1,6 +1,7 @@
 import FeedbackButtons from './FeedbackButtons';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import TypingCursor from './TypingCursor';
 
 function ThinkingSkeleton() {
     return (
@@ -20,7 +21,7 @@ function ThinkingSkeleton() {
     );
 }
 
-export default function AnswerDisplay({ answer, isLoading, isThinking }) {
+export default function AnswerDisplay({ answer, isLoading, isThinking, isStreaming }) {
     // Empty state
     if (!answer && !isLoading && !isThinking) {
         return (
@@ -93,14 +94,15 @@ export default function AnswerDisplay({ answer, isLoading, isThinking }) {
                 <ThinkingSkeleton />
             ) : (
                 <>
-                    <div className="answer-markdown">
+                    <div className="answer-markdown fade-reveal-container">
                         <div className="answer-wrapper">
                             <ReactMarkdown remarkPlugins={[remarkGfm]}>
                                 {answer?.answer || ""}
                             </ReactMarkdown>
+                            <TypingCursor isStreaming={isStreaming} />
                         </div>
                     </div>
-                    {answer?.answer && !isThinking && (
+                    {answer?.answer && !isStreaming && !isThinking && (
                         <FeedbackButtons
                             question={answer.question}
                             answer={answer.answer}
@@ -112,4 +114,5 @@ export default function AnswerDisplay({ answer, isLoading, isThinking }) {
         </div>
     );
 }
+
 

@@ -4,16 +4,40 @@ import FileUpload from './components/FileUpload';
 import QuestionInput from './components/QuestionInput';
 import AnswerDisplay from './components/AnswerDisplay';
 import ConversationHistory from './components/ConversationHistory';
+import DocumentSelector from './components/DocumentSelector';
 import LoadingOverlay from './components/LoadingOverlay';
 import Toast from './components/Toast';
+
+// --- localStorage helpers ---
+const STORAGE_KEY = 'rag_conversation_history';
+const MAX_PERSISTED = 20;
+
+function loadHistory() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.slice(0, MAX_PERSISTED) : [];
+  } catch { return []; }
+}
+
+function saveHistory(items) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(items.slice(0, MAX_PERSISTED)));
+  } catch (e) {
+    console.warn('Failed to persist conversation history:', e);
+  }
+}
 
 function App() {
   const [uploadedFiles, setUploadedFiles] = useState([]);
   const [currentAnswer, setCurrentAnswer] = useState(null);
   const [isQuerying, setIsQuerying] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
+  const [isStreaming, setIsStreaming] = useState(false);
   const [isLoadingDocs, setIsLoadingDocs] = useState(false);
-  const [conversationHistory, setConversationHistory] = useState([]);
+  const [conversationHistory, setConversationHistory] = useState(() => loadHistory());
+  const [selectedDocs, setSelectedDocs] = useState([]);
   const [toast, setToast] = useState({ message: null, type: 'error' });
 
   // Ref for cancelling in-flight requests
@@ -24,6 +48,11 @@ function App() {
   useEffect(() => {
     fetchDocuments();
   }, []);
+
+  // Persist conversation to localStorage whenever it changes
+  useEffect(() => {
+    saveHistory(conversationHistory);
+  }, [conversationHistory]);
 
   // Auto-scroll whenever currentAnswer updates
   useEffect(() => {
@@ -67,6 +96,8 @@ function App() {
     try {
       await deleteDocument(filename);
       setUploadedFiles(prev => prev.filter(f => f !== filename));
+      // Remove from selectedDocs if present
+      setSelectedDocs(prev => prev.filter(d => d !== filename));
       showToast(`Deleted ${filename}`, 'success');
     } catch (error) {
       console.error("Failed to delete document:", error);
@@ -84,6 +115,7 @@ function App() {
 
     setIsQuerying(true);
     setIsThinking(true);
+    setIsStreaming(false);
     setCurrentAnswer({
       answer: "",
       question: question,
@@ -91,12 +123,12 @@ function App() {
       retrieved_chunks: []
     });
 
+    const docsFilter = selectedDocs.length > 0 ? selectedDocs : [];
     const MAX_RETRIES = 2;
     let lastError = null;
 
     // Retry loop for streaming
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-      // Don't retry if already aborted (user submitted new question)
       if (controller.signal.aborted) return;
 
       try {
@@ -107,21 +139,23 @@ function App() {
             if (!receivedFirstToken) {
               receivedFirstToken = true;
               setIsThinking(false);
+              setIsStreaming(true);
             }
             setCurrentAnswer(prev => ({
               ...prev,
               answer: currentText
             }));
           },
-          controller.signal
+          controller.signal,
+          docsFilter
         );
 
-        // If aborted during streaming, exit silently
         if (controller.signal.aborted) return;
 
         // Streaming success
         setIsQuerying(false);
         setIsThinking(false);
+        setIsStreaming(false);
         const newHistoryItem = {
           id: Date.now().toString(),
           question: question,
@@ -132,16 +166,12 @@ function App() {
           isRefusal: fullText.includes("cannot answer")
         };
         setConversationHistory(prev => [newHistoryItem, ...prev].slice(0, 50));
-        return; // Success — exit
+        return;
 
       } catch (error) {
-        if (error.name === 'AbortError' || controller.signal.aborted) {
-          // User cancelled — exit silently
-          return;
-        }
+        if (error.name === 'AbortError' || controller.signal.aborted) return;
         lastError = error;
         console.warn(`Streaming attempt ${attempt + 1}/${MAX_RETRIES} failed:`, error);
-        // Brief delay before retry
         if (attempt < MAX_RETRIES - 1) {
           await new Promise(r => setTimeout(r, 800));
         }
@@ -154,7 +184,8 @@ function App() {
 
     try {
       setIsThinking(true);
-      const result = await queryDocuments(question);
+      setIsStreaming(false);
+      const result = await queryDocuments(question, null, docsFilter);
 
       if (controller.signal.aborted) return;
 
@@ -179,13 +210,15 @@ function App() {
       showToast("Failed to generate answer", 'error');
       setIsQuerying(false);
       setIsThinking(false);
+      setIsStreaming(false);
       setCurrentAnswer(null);
     }
-  }, []);
+  }, [selectedDocs]);
 
   const handleClearHistory = () => {
     if (window.confirm('Are you sure you want to clear the conversation history?')) {
       setConversationHistory([]);
+      localStorage.removeItem(STORAGE_KEY);
     }
   };
 
@@ -221,9 +254,15 @@ function App() {
           <div className="flex-1 overflow-y-auto custom-scrollbar p-2 sm:p-4 lg:p-6">
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 max-w-[1600px] mx-auto w-full">
 
-              {/* File Upload Section */}
+              {/* File Upload + Document Selector Section */}
               <div className="xl:col-span-1 flex flex-col gap-6">
                 <FileUpload onUploadSuccess={handleUploadSuccess} />
+
+                {/* Document Selector */}
+                <DocumentSelector
+                  selectedDocs={selectedDocs}
+                  onSelectionChange={setSelectedDocs}
+                />
 
                 {uploadedFiles.length > 0 && (
                   <div className="bg-cyber-darker/50 backdrop-blur-md border border-cyber-primary/20 rounded-xl p-4 shadow-lg shadow-cyber-primary/5">
@@ -273,6 +312,7 @@ function App() {
                     answer={currentAnswer}
                     isLoading={isQuerying}
                     isThinking={isThinking}
+                    isStreaming={isStreaming}
                   />
                 </div>
               </div>
@@ -282,7 +322,7 @@ function App() {
         </main>
 
         {/* Right Column: Logs Panel (Sidebar) */}
-        <aside className="w-full lg:w-80 xl:w-96 flex-none h-[40vh] lg:h-full border-t lg:border-t-0 lg:border-l border-cyber-primary/10 bg-cyber-darker/50 backdrop-blur-md overflow-hidden z-20">
+        <aside className="w-full lg:w-[260px] xl:w-[280px] flex-none h-[40vh] lg:h-full border-t lg:border-t-0 lg:border-l border-cyber-primary/10 bg-cyber-darker/50 backdrop-blur-md overflow-hidden z-20">
           <ConversationHistory
             history={conversationHistory}
             onClearHistory={handleClearHistory}

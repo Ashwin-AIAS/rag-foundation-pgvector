@@ -48,12 +48,16 @@ export async function uploadFile(file, onUploadProgress) {
  * Query the RAG system with a question
  * @param {string} question - The user's question
  * @param {number} topK - Optional: number of chunks to retrieve
+ * @param {string[]} selectedDocuments - Optional: filter to these source files
  * @returns {Promise<Object>} Query result with answer and chunks
  */
-export async function queryDocuments(question, topK = null) {
+export async function queryDocuments(question, topK = null, selectedDocuments = []) {
     const body = { question };
     if (topK !== null) {
         body.top_k = topK;
+    }
+    if (selectedDocuments && selectedDocuments.length > 0) {
+        body.selected_documents = selectedDocuments;
     }
 
     const response = await fetch(`${API_BASE_URL}/query`, {
@@ -79,13 +83,18 @@ export async function queryDocuments(question, topK = null) {
  * @param {AbortSignal} signal - Optional AbortSignal for cancellation
  * @returns {Promise<string>} Full generated text
  */
-export async function streamQuery(question, onUpdate, signal = null) {
+export async function streamQuery(question, onUpdate, signal = null, selectedDocuments = []) {
+    const body = { question };
+    if (selectedDocuments && selectedDocuments.length > 0) {
+        body.selected_documents = selectedDocuments;
+    }
+
     const fetchOptions = {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ question }),
+        body: JSON.stringify(body),
     };
 
     if (signal) {

@@ -42,7 +42,7 @@ body {
 /* ── Markdown Answer Styles ────────────────────────────────── */
 
 .answer-markdown {
-  line-height: 1.9;
+  line-height: 1.7;
   font-size: 16px;
   color: #e6f1ff;
   max-width: 900px;
@@ -292,4 +292,182 @@ body {
   100% {
     background-position: -200% 0;
   }
+}
+
+/* ── Section Fade Reveal ───────────────────────────────────── */
+
+.fade-reveal-container h2,
+.fade-reveal-container h3,
+.fade-reveal-container p,
+.fade-reveal-container ul,
+.fade-reveal-container ol,
+.fade-reveal-container blockquote,
+.fade-reveal-container pre,
+.fade-reveal-container table {
+  animation: fade-reveal-in 300ms ease-out both;
+}
+
+.fade-reveal-container> :nth-child(1) {
+  animation-delay: 0ms;
+}
+
+.fade-reveal-container> :nth-child(2) {
+  animation-delay: 60ms;
+}
+
+.fade-reveal-container> :nth-child(3) {
+  animation-delay: 120ms;
+}
+
+.fade-reveal-container> :nth-child(4) {
+  animation-delay: 180ms;
+}
+
+.fade-reveal-container> :nth-child(5) {
+  animation-delay: 240ms;
+}
+
+.fade-reveal-container> :nth-child(n+6) {
+  animation-delay: 300ms;
+}
+
+@keyframes fade-reveal-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── Document Selector ─────────────────────────────────────── */
+
+.doc-selector {
+  background: rgba(10, 15, 28, 0.5);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(0, 212, 255, 0.15);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.doc-selector-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: transparent;
+  border: none;
+  color: #4fc3f7;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 200ms;
+}
+
+.doc-selector-toggle:hover {
+  background: rgba(0, 212, 255, 0.05);
+}
+
+.doc-selector-icon {
+  font-size: 12px;
+  color: #4fc3f7;
+}
+
+.doc-selector-title {
+  flex: 1;
+  text-align: left;
+}
+
+.doc-selector-badge {
+  font-size: 11px;
+  color: rgba(230, 241, 255, 0.5);
+  background: rgba(0, 212, 255, 0.1);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-family: monospace;
+}
+
+.doc-selector-body {
+  padding: 0 16px 14px 16px;
+  border-top: 1px solid rgba(0, 212, 255, 0.08);
+}
+
+.doc-selector-actions {
+  display: flex;
+  gap: 8px;
+  padding: 10px 0 8px 0;
+}
+
+.doc-selector-action {
+  font-size: 11px;
+  color: #4fc3f7;
+  background: rgba(0, 212, 255, 0.08);
+  border: 1px solid rgba(0, 212, 255, 0.15);
+  border-radius: 4px;
+  padding: 3px 10px;
+  cursor: pointer;
+  transition: all 200ms;
+}
+
+.doc-selector-action:hover {
+  background: rgba(0, 212, 255, 0.15);
+  border-color: rgba(0, 212, 255, 0.3);
+}
+
+.doc-selector-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.doc-selector-item {
+  padding: 5px 0;
+}
+
+.doc-selector-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  color: rgba(230, 241, 255, 0.75);
+  font-size: 13px;
+  transition: color 200ms;
+}
+
+.doc-selector-label:hover {
+  color: #e6f1ff;
+}
+
+.doc-selector-checkbox {
+  accent-color: #4fc3f7;
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+}
+
+.doc-selector-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.doc-selector-hint {
+  font-size: 11px;
+  color: rgba(230, 241, 255, 0.35);
+  margin-top: 8px;
+  font-style: italic;
+}
+
+.doc-selector-loading {
+  font-size: 12px;
+  color: rgba(230, 241, 255, 0.4);
+  padding: 10px 0;
 }

@@ -19,6 +19,10 @@ class QueryRequest(BaseModel):
         le=20,
         example=5
     )
+    selected_documents: Optional[List[str]] = Field(
+        None,
+        description="Optional list of source filenames to restrict retrieval to"
+    )
 
 
 class RetrievedChunk(BaseModel):

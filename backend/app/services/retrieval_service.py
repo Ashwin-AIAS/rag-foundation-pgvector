@@ -25,7 +25,8 @@ class RetrievalService:
         self,
         query_embedding: List[float],
         top_k: int = None,
-        similarity_threshold: float = None
+        similarity_threshold: float = None,
+        source_files: List[str] = None
     ) -> List[Dict[str, Any]]:
         """
         Retrieve the most relevant document chunks for a query embedding.
@@ -34,6 +35,7 @@ class RetrievalService:
             query_embedding: The query vector (1536 dimensions)
             top_k: Number of chunks to retrieve (defaults to settings.TOP_K)
             similarity_threshold: Minimum similarity score (defaults to settings.SIMILARITY_THRESHOLD)
+            source_files: Optional list of source filenames to restrict retrieval to
             
         Returns:
             List of dictionaries containing:
@@ -56,9 +58,28 @@ class RetrievalService:
         # Convert embedding list to PostgreSQL vector format
         embedding_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
         
-        # Perform vector similarity search using pgvector's cosine distance operator (<=>)
-        # Note: cosine distance = 1 - cosine similarity
-        query = text("""
+        # Build query with optional source_file filter
+        where_clauses = ["1 - (embedding <=> :query_embedding) >= :threshold"]
+        params = {
+            "query_embedding": embedding_str,
+            "threshold": similarity_threshold,
+            "limit": top_k
+        }
+        
+        if source_files and len(source_files) > 0:
+            # Build parameterized IN clause
+            file_params = {}
+            file_placeholders = []
+            for i, sf in enumerate(source_files):
+                key = f"sf_{i}"
+                file_params[key] = sf
+                file_placeholders.append(f":{key}")
+            where_clauses.append(f"source_file IN ({','.join(file_placeholders)})")
+            params.update(file_params)
+        
+        where_sql = " AND ".join(where_clauses)
+        
+        query = text(f"""
             SELECT 
                 chunk_text,
                 source_file,
@@ -66,20 +87,13 @@ class RetrievalService:
                 chunk_metadata,
                 1 - (embedding <=> :query_embedding) AS similarity_score
             FROM document_chunks
-            WHERE 1 - (embedding <=> :query_embedding) >= :threshold
+            WHERE {where_sql}
             ORDER BY embedding <=> :query_embedding
             LIMIT :limit
         """)
         
         try:
-            result = self.db.execute(
-                query,
-                {
-                    "query_embedding": embedding_str,
-                    "threshold": similarity_threshold,
-                    "limit": top_k
-                }
-            )
+            result = self.db.execute(query, params)
             
             # Convert result rows to dictionaries
             chunks = []
