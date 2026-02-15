@@ -73,6 +73,60 @@ export async function queryDocuments(question, topK = null) {
 }
 
 /**
+ * Stream a query to the RAG system
+ * @param {string} question - The user's question
+ * @param {function} onChunk - Callback for each text chunk
+ * @param {function} onComplete - Callback when completed (optional)
+ * @returns {Promise<void>}
+ */
+export async function streamQuery(question, onChunk, onComplete) {
+    const response = await fetch(`${API_BASE_URL}/query?stream=true`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ question }),
+    });
+
+    if (!response.ok) {
+        // Try to parse error
+        const error = await response.json().catch(() => ({ detail: 'Streaming query failed' }));
+        throw new Error(error.detail || `HTTP ${response.status}`);
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let isRefusal = false;
+    let accumulatedText = "";
+
+    try {
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            const chunk = decoder.decode(value, { stream: true });
+            accumulatedText += chunk;
+
+            // Check for refusal in the first few chunks
+            if (accumulatedText.length < 100 && accumulatedText.includes("cannot answer")) {
+                isRefusal = true;
+            }
+
+            if (onChunk) {
+                onChunk(chunk);
+            }
+        }
+    } catch (error) {
+        console.error("Error reading stream:", error);
+        throw error;
+    } finally {
+        if (onComplete) {
+            onComplete(accumulatedText, isRefusal);
+        }
+    }
+}
+
+/**
  * Get list of all uploaded documents
  * @returns {Promise<Object>} List of documents
  */

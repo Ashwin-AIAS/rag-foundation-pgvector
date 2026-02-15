@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getDocuments, deleteDocument } from './services/api';
+import { getDocuments, deleteDocument, streamQuery } from './services/api';
 import FileUpload from './components/FileUpload';
 import QuestionInput from './components/QuestionInput';
 import AnswerDisplay from './components/AnswerDisplay';
@@ -61,26 +61,53 @@ function App() {
     }
   };
 
-  const handleQuerySuccess = (result) => {
-    setCurrentAnswer(result);
-    setIsQuerying(false);
-
-    const newHistoryItem = {
-      id: Date.now().toString(),
-      question: result.question,
-      answer: result.answer,
-      retrieved_chunks: result.retrieved_chunks,
-      num_chunks_retrieved: result.num_chunks_retrieved,
-      timestamp: new Date().toISOString(),
-      isRefusal: result.num_chunks_retrieved === 0 || result.answer.includes('cannot answer')
-    };
-
-    setConversationHistory(prev => [newHistoryItem, ...prev].slice(0, 50));
-  };
-
-  const handleQueryStart = () => {
+  const handleQueryStart = async (question) => {
     setIsQuerying(true);
-    setCurrentAnswer(null);
+    // Initialize current answer for streaming
+    setCurrentAnswer({
+      answer: "",
+      question: question,
+      num_chunks_retrieved: 0,
+      retrieved_chunks: []
+    });
+
+    try {
+      await streamQuery(
+        question,
+        (chunk) => {
+          // On first chunk, hide loading overlay and start showing text
+          setIsQuerying(false);
+          setCurrentAnswer(prev => ({
+            ...prev,
+            answer: (prev?.answer || "") + chunk
+          }));
+        },
+        (fullText, isRefusal) => {
+          // On complete
+          setIsQuerying(false);
+
+          // Add to history
+          const newHistoryItem = {
+            id: Date.now().toString(),
+            question: question,
+            answer: fullText,
+            retrieved_chunks: [], // We might want to update this if API returns chunks in the stream or separately
+            num_chunks_retrieved: 0,
+            timestamp: new Date().toISOString(),
+            isRefusal: isRefusal
+          };
+
+          setConversationHistory(prev => [newHistoryItem, ...prev].slice(0, 50));
+        }
+      );
+    } catch (error) {
+      console.error("Streaming failed:", error);
+      showToast("Failed to generate answer", 'error');
+      setIsQuerying(false);
+      // Keep the partial answer if any, or reset? 
+      // If it failed mid-stream, the matching history item won't be added, but the UI shows partial.
+      // Let's leave partial answer visible.
+    }
   };
 
   const handleClearHistory = () => {
@@ -162,7 +189,6 @@ function App() {
               <div className="xl:col-span-2 flex flex-col gap-6">
                 <div className="flex-none sticky top-0 z-10 bg-transparent">
                   <QuestionInput
-                    onQuerySuccess={handleQuerySuccess}
                     onQueryStart={handleQueryStart}
                     disabled={uploadedFiles.length === 0}
                   />

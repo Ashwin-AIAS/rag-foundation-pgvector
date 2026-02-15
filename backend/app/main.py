@@ -1,4 +1,5 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
+from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 import tempfile
@@ -187,6 +188,7 @@ async def delete_document(filename: str, db: Session = Depends(get_db)):
 @app.post("/query", response_model=QueryResponse)
 async def query_documents(
     request: QueryRequest,
+    stream: bool = False,
     db: Session = Depends(get_db)
 ):
     """
@@ -223,6 +225,12 @@ async def query_documents(
         # Step 3: Check if we have sufficient context
         if len(retrieved_chunks) < settings.MIN_CHUNKS_REQUIRED:
             # Not enough relevant context found
+            if stream:
+                # For streaming, we yield the refusal message
+                async def refuse_generator():
+                    yield "I cannot answer this question based on the available documents."
+                return StreamingResponse(refuse_generator(), media_type="text/plain")
+            
             return QueryResponse(
                 answer="I cannot answer this question based on the available documents.",
                 retrieved_chunks=[],
@@ -244,6 +252,11 @@ async def query_documents(
         
         if is_table_response:
             # Construct Table Response
+            # ... (Existing table logic remains relatively same, likely no streaming for tables yet)
+            # For simplicity, if it's a table response, we ignore stream=True for the actual data structure part
+            # OR we just return the standard JSON response because streaming a JSON object is complex.
+            # Let's fallback to standard JSON for table responses even if stream=True is requested.
+            
             all_rows = []
             seen_hashes = set()
             
@@ -270,7 +283,7 @@ async def query_documents(
             )
             generation_service = GenerationService()
             summary_answer = generation_service.generate(prompt)
-            
+             
             response_chunks = [
                 RetrievedChunk(
                     chunk_text=chunk["chunk_text"],
@@ -282,6 +295,7 @@ async def query_documents(
                 for chunk in retrieved_chunks
             ]
             
+            # Return standard JSON response for tables
             return QueryResponse(
                 answer=summary_answer, # Providing summary + structured data
                 retrieved_chunks=response_chunks,
@@ -304,8 +318,16 @@ async def query_documents(
             structured_mode=is_listing_intent
         )
         
-        # Step 5: Generate answer
         generation_service = GenerationService()
+
+        # STREAMING LOGIC
+        if stream:
+            return StreamingResponse(
+                generation_service.stream_generate(prompt),
+                media_type="text/plain"
+            )
+
+        # STANDARD LOGIC
         raw_answer = generation_service.generate(prompt)
         
         # Step 6: Parse structured response if needed

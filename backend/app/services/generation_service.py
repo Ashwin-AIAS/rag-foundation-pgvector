@@ -56,3 +56,34 @@ class GenerationService:
             
         except Exception as e:
             raise Exception(f"Generation failed: {str(e)}")
+
+    def stream_generate(self, prompt: str):
+        """
+        Generate a streaming answer using the Gemini API.
+        
+        Args:
+            prompt: The complete prompt including system instructions,
+                   context, and user question
+            
+        Yields:
+            Chunks of generated text
+        """
+        try:
+            generation_config = genai.types.GenerationConfig(
+                temperature=self.temperature,
+                max_output_tokens=self.max_tokens
+            )
+            
+            response = self.model.generate_content(
+                prompt,
+                generation_config=generation_config,
+                stream=True
+            )
+            
+            for chunk in response:
+                if chunk.text:
+                    yield chunk.text
+                    
+        except Exception as e:
+            logging.error(f"Streaming generation failed: {str(e)}")
+            yield f"[Error generating response: {str(e)}]"
