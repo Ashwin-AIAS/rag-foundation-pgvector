@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { getDocuments, deleteDocument, streamQuery, queryDocuments } from './services/api';
 import FileUpload from './components/FileUpload';
 import QuestionInput from './components/QuestionInput';
@@ -11,13 +11,26 @@ function App() {
   const [uploadedFiles, setUploadedFiles] = useState([]);
   const [currentAnswer, setCurrentAnswer] = useState(null);
   const [isQuerying, setIsQuerying] = useState(false);
+  const [isThinking, setIsThinking] = useState(false);
   const [isLoadingDocs, setIsLoadingDocs] = useState(false);
   const [conversationHistory, setConversationHistory] = useState([]);
   const [toast, setToast] = useState({ message: null, type: 'error' });
 
+  // Ref for cancelling in-flight requests
+  const abortControllerRef = useRef(null);
+  // Ref for auto-scrolling to the answer
+  const answerRef = useRef(null);
+
   useEffect(() => {
     fetchDocuments();
   }, []);
+
+  // Auto-scroll whenever currentAnswer updates
+  useEffect(() => {
+    if (currentAnswer?.answer && answerRef.current) {
+      answerRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }, [currentAnswer?.answer]);
 
   const showToast = (message, type = 'error') => {
     setToast({ message, type });
@@ -61,8 +74,16 @@ function App() {
     }
   };
 
-  const handleQueryStart = async (question) => {
+  const handleQueryStart = useCallback(async (question) => {
+    // Cancel any in-flight request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     setIsQuerying(true);
+    setIsThinking(true);
     setCurrentAnswer({
       answer: "",
       question: question,
@@ -70,60 +91,97 @@ function App() {
       retrieved_chunks: []
     });
 
-    try {
-      const fullText = await streamQuery(
-        question,
-        (currentText) => {
-          // Update UI with accumulated text during streaming
-          setCurrentAnswer(prev => ({
-            ...prev,
-            answer: currentText
-          }));
-        }
-      );
+    const MAX_RETRIES = 2;
+    let lastError = null;
 
-      // Streaming success - add to history
+    // Retry loop for streaming
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      // Don't retry if already aborted (user submitted new question)
+      if (controller.signal.aborted) return;
+
+      try {
+        let receivedFirstToken = false;
+        const fullText = await streamQuery(
+          question,
+          (currentText) => {
+            if (!receivedFirstToken) {
+              receivedFirstToken = true;
+              setIsThinking(false);
+            }
+            setCurrentAnswer(prev => ({
+              ...prev,
+              answer: currentText
+            }));
+          },
+          controller.signal
+        );
+
+        // If aborted during streaming, exit silently
+        if (controller.signal.aborted) return;
+
+        // Streaming success
+        setIsQuerying(false);
+        setIsThinking(false);
+        const newHistoryItem = {
+          id: Date.now().toString(),
+          question: question,
+          answer: fullText,
+          retrieved_chunks: [],
+          num_chunks_retrieved: 0,
+          timestamp: new Date().toISOString(),
+          isRefusal: fullText.includes("cannot answer")
+        };
+        setConversationHistory(prev => [newHistoryItem, ...prev].slice(0, 50));
+        return; // Success — exit
+
+      } catch (error) {
+        if (error.name === 'AbortError' || controller.signal.aborted) {
+          // User cancelled — exit silently
+          return;
+        }
+        lastError = error;
+        console.warn(`Streaming attempt ${attempt + 1}/${MAX_RETRIES} failed:`, error);
+        // Brief delay before retry
+        if (attempt < MAX_RETRIES - 1) {
+          await new Promise(r => setTimeout(r, 800));
+        }
+      }
+    }
+
+    // All retries exhausted — fall back to non-streaming
+    if (controller.signal.aborted) return;
+    console.warn("All streaming retries failed, attempting non-streaming fallback...", lastError);
+
+    try {
+      setIsThinking(true);
+      const result = await queryDocuments(question);
+
+      if (controller.signal.aborted) return;
+
       setIsQuerying(false);
+      setIsThinking(false);
+      setCurrentAnswer(result);
+
       const newHistoryItem = {
         id: Date.now().toString(),
-        question: question,
-        answer: fullText,
-        retrieved_chunks: [], // Not available from streamQuery callback
-        num_chunks_retrieved: 0, // Not available from streamQuery callback
+        question: result.question,
+        answer: result.answer,
+        retrieved_chunks: result.retrieved_chunks,
+        num_chunks_retrieved: result.num_chunks_retrieved,
         timestamp: new Date().toISOString(),
-        isRefusal: fullText.includes("cannot answer")
+        isRefusal: result.answer.includes("cannot answer")
       };
       setConversationHistory(prev => [newHistoryItem, ...prev].slice(0, 50));
 
-    } catch (error) {
-      console.warn("Streaming failed, attempting fallback...", error);
-
-      try {
-        // Fallback to normal query
-        const result = await queryDocuments(question);
-
-        setIsQuerying(false);
-        setCurrentAnswer(result);
-
-        const newHistoryItem = {
-          id: Date.now().toString(),
-          question: result.question,
-          answer: result.answer,
-          retrieved_chunks: result.retrieved_chunks,
-          num_chunks_retrieved: result.num_chunks_retrieved,
-          timestamp: new Date().toISOString(),
-          isRefusal: result.answer.includes("cannot answer")
-        };
-        setConversationHistory(prev => [newHistoryItem, ...prev].slice(0, 50));
-
-      } catch (fallbackError) {
-        console.error("Fallback failed:", fallbackError);
-        showToast("Failed to generate answer", 'error');
-        setIsQuerying(false);
-        setCurrentAnswer(null);
-      }
+    } catch (fallbackError) {
+      if (controller.signal.aborted) return;
+      console.error("Fallback failed:", fallbackError);
+      showToast("Failed to generate answer", 'error');
+      setIsQuerying(false);
+      setIsThinking(false);
+      setCurrentAnswer(null);
     }
-  };
+  }, []);
 
   const handleClearHistory = () => {
     if (window.confirm('Are you sure you want to clear the conversation history?')) {
@@ -210,10 +268,11 @@ function App() {
                   />
                 </div>
 
-                <div className="min-h-[200px]">
+                <div ref={answerRef} className="min-h-[200px]">
                   <AnswerDisplay
                     answer={currentAnswer}
                     isLoading={isQuerying}
+                    isThinking={isThinking}
                   />
                 </div>
               </div>

@@ -1,11 +1,28 @@
 import FeedbackButtons from './FeedbackButtons';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-// Removed AnswerDisplay.css import
 
-export default function AnswerDisplay({ answer, isLoading }) {
+function ThinkingSkeleton() {
+    return (
+        <div className="thinking-skeleton">
+            <div className="thinking-header">
+                <span className="thinking-dot"></span>
+                <span className="thinking-label">Thinking…</span>
+            </div>
+            <div className="skeleton-lines">
+                <div className="skeleton-line skeleton-line-long"></div>
+                <div className="skeleton-line skeleton-line-medium"></div>
+                <div className="skeleton-line skeleton-line-short"></div>
+                <div className="skeleton-line skeleton-line-long"></div>
+                <div className="skeleton-line skeleton-line-medium"></div>
+            </div>
+        </div>
+    );
+}
+
+export default function AnswerDisplay({ answer, isLoading, isThinking }) {
     // Empty state
-    if (!answer && !isLoading) {
+    if (!answer && !isLoading && !isThinking) {
         return (
             <div className="answer-display">
                 <h2>Answer</h2>
@@ -16,20 +33,11 @@ export default function AnswerDisplay({ answer, isLoading }) {
         );
     }
 
-    // Loading state
-    if (isLoading) {
-        return (
-            <div className="answer-display">
-                <h2>Answer</h2>
-                <div className="loading-state">
-                    <span className="spinner"></span>
-                </div>
-            </div>
-        );
-    }
+    // Thinking skeleton — shown before first streaming token arrives
+    const showSkeleton = isThinking && (!answer?.answer || answer.answer.length === 0);
 
     // Table Response
-    if (answer.answer_type === 'table' && answer.columns && answer.rows) {
+    if (answer?.answer_type === 'table' && answer.columns && answer.rows) {
         return (
             <div className="answer-display">
                 <h2>Generated Analysis</h2>
@@ -66,7 +74,6 @@ export default function AnswerDisplay({ answer, isLoading }) {
                     </table>
                 </div>
 
-                {/* Feedback buttons - shown for all answers */}
                 <div className="mt-4">
                     <FeedbackButtons
                         question={answer.question}
@@ -78,23 +85,31 @@ export default function AnswerDisplay({ answer, isLoading }) {
         );
     }
 
-    // Display answer and feedback buttons
+    // Display answer with skeleton or content
     return (
         <div className="answer-display">
             <h2>Answer</h2>
-            <div className="answer-markdown">
-                <div className="answer-wrapper">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                        {answer.answer}
-                    </ReactMarkdown>
-                </div>
-            </div>
-            {/* Feedback buttons - shown for all answers including refusals */}
-            <FeedbackButtons
-                question={answer.question}
-                answer={answer.answer}
-                numChunksRetrieved={answer.num_chunks_retrieved}
-            />
+            {showSkeleton ? (
+                <ThinkingSkeleton />
+            ) : (
+                <>
+                    <div className="answer-markdown">
+                        <div className="answer-wrapper">
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                {answer?.answer || ""}
+                            </ReactMarkdown>
+                        </div>
+                    </div>
+                    {answer?.answer && !isThinking && (
+                        <FeedbackButtons
+                            question={answer.question}
+                            answer={answer.answer}
+                            numChunksRetrieved={answer.num_chunks_retrieved}
+                        />
+                    )}
+                </>
+            )}
         </div>
     );
 }
+

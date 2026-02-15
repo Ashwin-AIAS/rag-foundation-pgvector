@@ -76,16 +76,23 @@ export async function queryDocuments(question, topK = null) {
  * Stream a query to the RAG system with robust error handling
  * @param {string} question - The user's question
  * @param {function} onUpdate - Callback for full text updates
+ * @param {AbortSignal} signal - Optional AbortSignal for cancellation
  * @returns {Promise<string>} Full generated text
  */
-export async function streamQuery(question, onUpdate) {
-    const response = await fetch(`${API_BASE_URL}/query?stream=true`, {
+export async function streamQuery(question, onUpdate, signal = null) {
+    const fetchOptions = {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
         },
         body: JSON.stringify({ question }),
-    });
+    };
+
+    if (signal) {
+        fetchOptions.signal = signal;
+    }
+
+    const response = await fetch(`${API_BASE_URL}/query?stream=true`, fetchOptions);
 
     if (!response.ok) {
         throw new Error(`Streaming failed: HTTP ${response.status}`);
@@ -112,6 +119,11 @@ export async function streamQuery(question, onUpdate) {
             }
         }
     } catch (error) {
+        // If aborted, cancel the reader and rethrow
+        if (signal?.aborted) {
+            try { reader.cancel(); } catch (_) { }
+            throw new DOMException('Aborted', 'AbortError');
+        }
         console.error("Error reading stream:", error);
         throw error;
     }
