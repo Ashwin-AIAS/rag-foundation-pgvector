@@ -188,7 +188,7 @@ async def delete_document(filename: str, db: Session = Depends(get_db)):
 @app.post("/query", response_model=QueryResponse)
 async def query_documents(
     request: QueryRequest,
-    stream: bool = Query(False),
+    stream: bool = Query(False), # Explicit query param to prevent 422 errors
     db: Session = Depends(get_db)
 ):
     """
