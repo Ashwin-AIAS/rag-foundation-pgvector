@@ -73,13 +73,12 @@ export async function queryDocuments(question, topK = null) {
 }
 
 /**
- * Stream a query to the RAG system
+ * Stream a query to the RAG system with robust error handling
  * @param {string} question - The user's question
- * @param {function} onChunk - Callback for each text chunk
- * @param {function} onComplete - Callback when completed (optional)
- * @returns {Promise<void>}
+ * @param {function} onUpdate - Callback for full text updates
+ * @returns {Promise<string>} Full generated text
  */
-export async function streamQuery(question, onChunk, onComplete) {
+export async function streamQuery(question, onUpdate) {
     const response = await fetch(`${API_BASE_URL}/query?stream=true`, {
         method: 'POST',
         headers: {
@@ -89,15 +88,16 @@ export async function streamQuery(question, onChunk, onComplete) {
     });
 
     if (!response.ok) {
-        // Try to parse error
-        const error = await response.json().catch(() => ({ detail: 'Streaming query failed' }));
-        throw new Error(error.detail || `HTTP ${response.status}`);
+        throw new Error(`Streaming failed: HTTP ${response.status}`);
+    }
+
+    if (!response.body) {
+        throw new Error("No response body");
     }
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
-    let isRefusal = false;
-    let accumulatedText = "";
+    let fullText = "";
 
     try {
         while (true) {
@@ -105,25 +105,18 @@ export async function streamQuery(question, onChunk, onComplete) {
             if (done) break;
 
             const chunk = decoder.decode(value, { stream: true });
-            accumulatedText += chunk;
+            fullText += chunk;
 
-            // Check for refusal in the first few chunks
-            if (accumulatedText.length < 100 && accumulatedText.includes("cannot answer")) {
-                isRefusal = true;
-            }
-
-            if (onChunk) {
-                onChunk(chunk);
+            if (onUpdate) {
+                onUpdate(fullText);
             }
         }
     } catch (error) {
         console.error("Error reading stream:", error);
         throw error;
-    } finally {
-        if (onComplete) {
-            onComplete(accumulatedText, isRefusal);
-        }
     }
+
+    return fullText;
 }
 
 /**

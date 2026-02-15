@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getDocuments, deleteDocument, streamQuery } from './services/api';
+import { getDocuments, deleteDocument, streamQuery, queryDocuments } from './services/api';
 import FileUpload from './components/FileUpload';
 import QuestionInput from './components/QuestionInput';
 import AnswerDisplay from './components/AnswerDisplay';
@@ -63,7 +63,6 @@ function App() {
 
   const handleQueryStart = async (question) => {
     setIsQuerying(true);
-    // Initialize current answer for streaming
     setCurrentAnswer({
       answer: "",
       question: question,
@@ -72,41 +71,57 @@ function App() {
     });
 
     try {
-      await streamQuery(
+      const fullText = await streamQuery(
         question,
-        (chunk) => {
-          // On first chunk, hide loading overlay and start showing text
-          setIsQuerying(false);
+        (currentText) => {
+          // Update UI with accumulated text during streaming
           setCurrentAnswer(prev => ({
             ...prev,
-            answer: (prev?.answer || "") + chunk
+            answer: currentText
           }));
-        },
-        (fullText, isRefusal) => {
-          // On complete
-          setIsQuerying(false);
-
-          // Add to history
-          const newHistoryItem = {
-            id: Date.now().toString(),
-            question: question,
-            answer: fullText,
-            retrieved_chunks: [], // We might want to update this if API returns chunks in the stream or separately
-            num_chunks_retrieved: 0,
-            timestamp: new Date().toISOString(),
-            isRefusal: isRefusal
-          };
-
-          setConversationHistory(prev => [newHistoryItem, ...prev].slice(0, 50));
         }
       );
-    } catch (error) {
-      console.error("Streaming failed:", error);
-      showToast("Failed to generate answer", 'error');
+
+      // Streaming success - add to history
       setIsQuerying(false);
-      // Keep the partial answer if any, or reset? 
-      // If it failed mid-stream, the matching history item won't be added, but the UI shows partial.
-      // Let's leave partial answer visible.
+      const newHistoryItem = {
+        id: Date.now().toString(),
+        question: question,
+        answer: fullText,
+        retrieved_chunks: [], // Not available from streamQuery callback
+        num_chunks_retrieved: 0, // Not available from streamQuery callback
+        timestamp: new Date().toISOString(),
+        isRefusal: fullText.includes("cannot answer")
+      };
+      setConversationHistory(prev => [newHistoryItem, ...prev].slice(0, 50));
+
+    } catch (error) {
+      console.warn("Streaming failed, attempting fallback...", error);
+
+      try {
+        // Fallback to normal query
+        const result = await queryDocuments(question);
+
+        setIsQuerying(false);
+        setCurrentAnswer(result);
+
+        const newHistoryItem = {
+          id: Date.now().toString(),
+          question: result.question,
+          answer: result.answer,
+          retrieved_chunks: result.retrieved_chunks,
+          num_chunks_retrieved: result.num_chunks_retrieved,
+          timestamp: new Date().toISOString(),
+          isRefusal: result.answer.includes("cannot answer")
+        };
+        setConversationHistory(prev => [newHistoryItem, ...prev].slice(0, 50));
+
+      } catch (fallbackError) {
+        console.error("Fallback failed:", fallbackError);
+        showToast("Failed to generate answer", 'error');
+        setIsQuerying(false);
+        setCurrentAnswer(null);
+      }
     }
   };
 

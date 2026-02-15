@@ -81,9 +81,11 @@ class GenerationService:
             )
             
             for chunk in response:
-                if chunk.text:
+                if hasattr(chunk, "text") and chunk.text:
                     yield chunk.text
                     
         except Exception as e:
             logging.error(f"Streaming generation failed: {str(e)}")
-            yield f"[Error generating response: {str(e)}]"
+            # In a real stream, we might want to yield a specific error marker, 
+            # but for now we'll just log it. The client will see the stream end.
+            raise e # Reraise to let caller handle it if possible, or just stop yielding

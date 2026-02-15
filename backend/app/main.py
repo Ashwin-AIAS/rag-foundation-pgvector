@@ -1,5 +1,5 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
-from fastapi.responses import StreamingResponse
+from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, Query
+from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 import tempfile
@@ -31,7 +31,7 @@ app = FastAPI(
 
 # Configure CORS for future frontend integration
 # In production, set ALLOWED_ORIGINS env var to the frontend URL
-allowed_origins_str = os.getenv("ALLOWED_ORIGINS", "*")
+allowed_origins_str = os.getenv("ALLOWED_ORIGINS", "https://rag-foundation-pgvector.vercel.app,http://localhost:5173,http://localhost:3000")
 allowed_origins = [origin.strip() for origin in allowed_origins_str.split(",")]
 
 app.add_middleware(
@@ -188,7 +188,7 @@ async def delete_document(filename: str, db: Session = Depends(get_db)):
 @app.post("/query", response_model=QueryResponse)
 async def query_documents(
     request: QueryRequest,
-    stream: bool = False,
+    stream: bool = Query(False),
     db: Session = Depends(get_db)
 ):
     """
@@ -322,12 +322,22 @@ async def query_documents(
 
         # STREAMING LOGIC
         if stream:
-            return StreamingResponse(
-                generation_service.stream_generate(prompt),
-                media_type="text/plain"
-            )
+            try:
+                # We need to ensure we can actually start the stream.
+                # If stream_generate immediately raises, we catch it here.
+                # However, once StreamingResponse starts, exceptions inside the generator
+                # will break the stream.
+                return StreamingResponse(
+                    generation_service.stream_generate(prompt),
+                    media_type="text/plain"
+                )
+            except Exception as e:
+                print(f"Streaming setup failed: {e}")
+                logging.error(f"Streaming setup failed: {e}")
+                # Fallback to normal execution if immediate failure
+                pass 
 
-        # STANDARD LOGIC
+        # STANDARD LOGIC (Fallback or requested)
         raw_answer = generation_service.generate(prompt)
         
         # Step 6: Parse structured response if needed
