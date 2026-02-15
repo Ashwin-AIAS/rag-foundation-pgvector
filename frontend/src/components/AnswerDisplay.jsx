@@ -34,9 +34,11 @@ export default function AnswerDisplay({ answer, isLoading }) {
             <div className="answer-display">
                 <h2>Generated Analysis</h2>
                 <div className="answer-markdown mb-4">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                        {answer.answer}
-                    </ReactMarkdown>
+                    <div className="answer-wrapper">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                            {answer.answer}
+                        </ReactMarkdown>
+                    </div>
                 </div>
 
                 <div className="overflow-x-auto rounded-lg border border-cyber-primary/20 shadow-[0_0_15px_rgba(0,212,255,0.05)] custom-scrollbar max-h-[500px]">
@@ -81,9 +83,11 @@ export default function AnswerDisplay({ answer, isLoading }) {
         <div className="answer-display">
             <h2>Answer</h2>
             <div className="answer-markdown">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {answer.answer}
-                </ReactMarkdown>
+                <div className="answer-wrapper">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {answer.answer}
+                    </ReactMarkdown>
+                </div>
             </div>
             {/* Feedback buttons - shown for all answers including refusals */}
             <FeedbackButtons

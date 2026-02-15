@@ -42,20 +42,22 @@ body {
 /* ── Markdown Answer Styles ────────────────────────────────── */
 
 .answer-markdown {
-  line-height: 1.85;
-  font-size: 15px;
+  line-height: 1.9;
+  font-size: 16px;
   color: #e6f1ff;
+  max-width: 900px;
   word-wrap: break-word;
   overflow-wrap: break-word;
 }
 
 .answer-markdown h1,
-.answer-markdown h2,
-.answer-markdown h3 {
-  margin-top: 1.5rem;
-  margin-bottom: 0.75rem;
-  font-weight: 600;
+.answer-markdown h2 {
+  margin-top: 2.2rem;
+  margin-bottom: 1rem;
+  font-weight: 700;
   color: #4fc3f7;
+  border-bottom: 1px solid rgba(79, 195, 247, 0.2);
+  padding-bottom: 6px;
   letter-spacing: 0.02em;
 }
 
@@ -68,17 +70,22 @@ body {
 }
 
 .answer-markdown h3 {
+  margin-top: 1.6rem;
+  margin-bottom: 0.6rem;
+  font-weight: 600;
+  color: #90caf9;
   font-size: 1.05rem;
+  letter-spacing: 0.02em;
 }
 
 .answer-markdown p {
-  margin-bottom: 1rem;
+  margin-bottom: 1.2rem;
 }
 
 .answer-markdown ul,
 .answer-markdown ol {
-  margin-left: 1.5rem;
-  margin-bottom: 1rem;
+  margin-left: 1.8rem;
+  margin-bottom: 1.2rem;
   padding-left: 0.5rem;
 }
 
@@ -91,7 +98,7 @@ body {
 }
 
 .answer-markdown li {
-  margin-bottom: 0.45rem;
+  margin-bottom: 0.6rem;
 }
 
 .answer-markdown li::marker {
@@ -99,7 +106,7 @@ body {
 }
 
 .answer-markdown strong {
-  color: #90caf9;
+  color: #ffffff;
   font-weight: 600;
 }
 
@@ -119,19 +126,19 @@ body {
 }
 
 .answer-markdown code {
-  background: rgba(0, 212, 255, 0.08);
-  color: #00d4ff;
-  padding: 0.15em 0.4em;
+  background: rgba(0, 255, 255, 0.08);
+  color: #00e5ff;
+  padding: 3px 6px;
   border-radius: 4px;
   font-size: 0.9em;
   font-family: 'Fira Code', 'Cascadia Code', monospace;
 }
 
 .answer-markdown pre {
-  background: rgba(5, 7, 13, 0.7);
+  background: rgba(0, 0, 0, 0.6);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 8px;
-  padding: 1rem;
+  padding: 12px;
   margin-bottom: 1rem;
   overflow-x: auto;
 }
@@ -182,4 +189,10 @@ body {
   border: none;
   border-top: 1px solid rgba(0, 212, 255, 0.15);
   margin: 1.5rem 0;
+}
+
+/* ── Answer Wrapper ────────────────────────────────────────── */
+
+.answer-wrapper {
+  padding: 10px 5px 40px 5px;
 }
