@@ -296,32 +296,44 @@ async def query_documents(
         embedding_service = EmbeddingService()
         query_embedding = embedding_service.embed_query(request.question)
         
-        # Step 2: Hybrid retrieval (broader initial set for reranking)
+        # Step 2: Hybrid retrieval with adaptive threshold
         retrieval_service = RetrievalService(db)
         initial_top_k = min(
             request.top_k if request.top_k is not None else RETRIEVAL_TOP_K,
             MAX_TOP_K
         )
-        retrieved_chunks = retrieval_service.retrieve(
-            query_embedding=query_embedding,
-            top_k=initial_top_k,
-            source_files=request.selected_documents,
-            user_question=request.question,
-        )
         
-        # Step 3: Check if we have sufficient context
+        # Adaptive fallback: try default threshold, then lower if zero results
+        THRESHOLDS = [settings.SIMILARITY_THRESHOLD, 0.4]
+        retrieved_chunks = []
+        
+        for threshold in THRESHOLDS:
+            retrieved_chunks = retrieval_service.retrieve(
+                query_embedding=query_embedding,
+                top_k=initial_top_k,
+                similarity_threshold=threshold,
+                source_files=request.selected_documents,
+                user_question=request.question,
+            )
+            logger.info(f"Retrieved {len(retrieved_chunks)} chunks (threshold={threshold})")
+            if len(retrieved_chunks) >= settings.MIN_CHUNKS_REQUIRED:
+                break
+        
+        # Step 3: Check if we have sufficient context after all retries
         if len(retrieved_chunks) < settings.MIN_CHUNKS_REQUIRED:
             elapsed_ms = int((time.time() - start_time) * 1000)
             log_query(db, request.question, elapsed_ms, 0,
                       request.selected_documents, 0, False)
             
+            fallback_msg = "No relevant content was found in the selected documents."
+            
             if stream:
                 async def refuse_generator():
-                    yield "I cannot answer this question based on the available documents."
+                    yield fallback_msg
                 return StreamingResponse(refuse_generator(), media_type="text/plain")
             
             return QueryResponse(
-                answer="I cannot answer this question based on the available documents.",
+                answer=fallback_msg,
                 retrieved_chunks=[],
                 num_chunks_retrieved=0,
                 question=request.question,

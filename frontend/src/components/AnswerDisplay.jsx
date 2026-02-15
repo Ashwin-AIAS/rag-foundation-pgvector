@@ -49,6 +49,33 @@ export default function AnswerDisplay({ answer, isLoading, isThinking, isStreami
     // Thinking skeleton — shown before first streaming token arrives
     const showSkeleton = isThinking && (!answer?.answer || answer.answer.length === 0);
 
+    // Zero chunks retrieved — show helpful fallback
+    if (
+        answer &&
+        answer.num_chunks_retrieved === 0 &&
+        !isStreaming &&
+        !isThinking &&
+        !isLoading &&
+        answer.answer
+    ) {
+        return (
+            <div className="answer-display">
+                <h2>Answer</h2>
+                <div className="answer-markdown">
+                    <div className="answer-wrapper zero-chunks-notice">
+                        <p>⚠️ No relevant passages found.</p>
+                        <p>Try:</p>
+                        <ul>
+                            <li>Selecting additional documents</li>
+                            <li>Clearing document filter</li>
+                            <li>Asking a more focused question</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     // Table Response
     if (answer?.answer_type === 'table' && answer.columns && answer.rows) {
         return (
