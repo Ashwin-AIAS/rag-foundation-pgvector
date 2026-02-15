@@ -296,7 +296,7 @@ async def query_documents(
         embedding_service = EmbeddingService()
         query_embedding = embedding_service.embed_query(request.question)
         
-        # Step 2: Hybrid retrieval with adaptive threshold fallback
+        # Step 2: Retrieve top-K chunks (no threshold — always return best matches)
         retrieval_service = RetrievalService(db)
         initial_top_k = min(
             request.top_k if request.top_k is not None else RETRIEVAL_TOP_K,
@@ -309,54 +309,29 @@ async def query_documents(
         else:
             logger.info("No document filter — searching all documents")
         
-        # Tier 1 & 2: Adaptive threshold (0.5 → 0.35)
-        THRESHOLDS = [settings.SIMILARITY_THRESHOLD, 0.35]
-        retrieved_chunks = []
-        
-        for threshold in THRESHOLDS:
-            retrieved_chunks = retrieval_service.retrieve(
-                query_embedding=query_embedding,
-                top_k=initial_top_k,
-                similarity_threshold=threshold,
-                source_files=request.selected_documents,
-                user_question=request.question,
+        retrieved_chunks = retrieval_service.retrieve(
+            query_embedding=query_embedding,
+            top_k=initial_top_k,
+            source_files=request.selected_documents,
+            user_question=request.question,
+        )
+        logger.info(f"Retrieved {len(retrieved_chunks)} chunks")
+        # Debug: log top-5 similarity scores
+        for i, c in enumerate(retrieved_chunks[:5]):
+            logger.debug(
+                f"  chunk[{i}] sim={c['similarity_score']:.4f} "
+                f"kw={c.get('keyword_score', 0):.4f} "
+                f"final={c.get('final_score', 0):.4f} "
+                f"src={c['source_file']}"
             )
-            logger.info(f"Retrieved {len(retrieved_chunks)} chunks (threshold={threshold})")
-            # Debug: log top-5 similarity scores
-            for i, c in enumerate(retrieved_chunks[:5]):
-                logger.debug(
-                    f"  chunk[{i}] sim={c['similarity_score']:.4f} "
-                    f"kw={c.get('keyword_score', 0):.4f} "
-                    f"final={c.get('final_score', 0):.4f} "
-                    f"src={c['source_file']}"
-                )
-            if len(retrieved_chunks) >= settings.MIN_CHUNKS_REQUIRED:
-                break
         
-        # Tier 3: No-threshold fallback — just return top_k by similarity
-        if len(retrieved_chunks) < settings.MIN_CHUNKS_REQUIRED:
-            logger.warning("All threshold-based retrievals returned zero — trying no-threshold fallback")
-            retrieved_chunks = retrieval_service.retrieve(
-                query_embedding=query_embedding,
-                top_k=initial_top_k,
-                source_files=request.selected_documents,
-                user_question=request.question,
-                skip_threshold=True,
-            )
-            logger.info(f"No-threshold fallback retrieved {len(retrieved_chunks)} chunks")
-            for i, c in enumerate(retrieved_chunks[:5]):
-                logger.debug(
-                    f"  fallback chunk[{i}] sim={c['similarity_score']:.4f} "
-                    f"src={c['source_file']}"
-                )
-        
-        # Step 3: Safe LLM fallback — still zero after all retries
-        if len(retrieved_chunks) < settings.MIN_CHUNKS_REQUIRED:
+        # Step 3: Only refuse if the database returned ZERO rows
+        if len(retrieved_chunks) == 0:
             elapsed_ms = int((time.time() - start_time) * 1000)
             log_query(db, request.question, elapsed_ms, 0,
                       request.selected_documents, 0, False)
             
-            fallback_msg = "The selected document does not contain enough relevant information for this query."
+            fallback_msg = "No relevant content was found in the selected documents."
             
             if stream:
                 async def refuse_generator():
@@ -368,7 +343,7 @@ async def query_documents(
                 retrieved_chunks=[],
                 num_chunks_retrieved=0,
                 question=request.question,
-                confidence=20,
+                confidence=0,
             )
         
         # Step 4: LLM Reranking

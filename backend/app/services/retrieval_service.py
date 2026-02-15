@@ -13,6 +13,9 @@ class RetrievalService:
     
     Combines pgvector cosine similarity (70%) with PostgreSQL full-text
     keyword search (30%) for more robust retrieval.
+    
+    Always returns top-K most similar chunks — no threshold filtering
+    in SQL.  The caller decides what to do with low-similarity results.
     """
     
     def __init__(self, db: Session):
@@ -22,40 +25,29 @@ class RetrievalService:
         self,
         query_embedding: List[float],
         top_k: int = None,
-        similarity_threshold: float = None,
         source_files: List[str] = None,
         user_question: str = None,
-        skip_threshold: bool = False,
+        **_kwargs,
     ) -> List[Dict[str, Any]]:
         """
         Hybrid retrieval: vector similarity + keyword full-text search.
         
         final_score = 0.7 * vector_score + 0.3 * keyword_score
         
-        Args:
-            query_embedding: The query vector
-            top_k: Number of chunks to retrieve
-            similarity_threshold: Minimum vector similarity score
-            source_files: Optional source file filter
-            user_question: Raw question text for keyword matching
+        Always returns the top_k results ordered by final_score DESC.
+        No minimum-similarity WHERE clause is applied.
         """
         if top_k is None:
             top_k = settings.TOP_K
-        if similarity_threshold is None:
-            similarity_threshold = settings.SIMILARITY_THRESHOLD
         
         embedding_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
         
-        # --- Build WHERE clauses ---
+        # --- Build WHERE clauses (source-file filter only) ---
         where_clauses = []
         params: Dict[str, Any] = {
             "query_embedding": embedding_str,
             "limit": top_k,
         }
-        
-        if not skip_threshold:
-            where_clauses.append("1 - (embedding <=> :query_embedding) >= :threshold")
-            params["threshold"] = similarity_threshold
         
         if source_files and len(source_files) > 0:
             file_params = {}
@@ -113,7 +105,7 @@ class RetrievalService:
                     1 - (embedding <=> :query_embedding) AS final_score
                 FROM document_chunks
                 WHERE {where_sql}
-                ORDER BY final_score DESC
+                ORDER BY embedding <=> :query_embedding
                 LIMIT :limit
             """)
         
@@ -136,4 +128,3 @@ class RetrievalService:
             
         except Exception as e:
             raise Exception(f"Retrieval failed: {str(e)}")
-
