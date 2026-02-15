@@ -1,7 +1,10 @@
+import logging
 from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 class RetrievalService:
@@ -22,6 +25,7 @@ class RetrievalService:
         similarity_threshold: float = None,
         source_files: List[str] = None,
         user_question: str = None,
+        skip_threshold: bool = False,
     ) -> List[Dict[str, Any]]:
         """
         Hybrid retrieval: vector similarity + keyword full-text search.
@@ -43,12 +47,15 @@ class RetrievalService:
         embedding_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
         
         # --- Build WHERE clauses ---
-        where_clauses = ["1 - (embedding <=> :query_embedding) >= :threshold"]
+        where_clauses = []
         params: Dict[str, Any] = {
             "query_embedding": embedding_str,
-            "threshold": similarity_threshold,
             "limit": top_k,
         }
+        
+        if not skip_threshold:
+            where_clauses.append("1 - (embedding <=> :query_embedding) >= :threshold")
+            params["threshold"] = similarity_threshold
         
         if source_files and len(source_files) > 0:
             file_params = {}
@@ -60,7 +67,7 @@ class RetrievalService:
             where_clauses.append(f"source_file IN ({','.join(file_placeholders)})")
             params.update(file_params)
         
-        where_sql = " AND ".join(where_clauses)
+        where_sql = " AND ".join(where_clauses) if where_clauses else "TRUE"
         
         # --- Choose between hybrid or vector-only ---
         use_keyword = bool(user_question and user_question.strip())

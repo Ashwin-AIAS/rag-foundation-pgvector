@@ -25,7 +25,7 @@ class Settings:
     
     # RAG retrieval settings
     TOP_K: int = int(os.getenv("TOP_K", "8"))
-    SIMILARITY_THRESHOLD: float = float(os.getenv("SIMILARITY_THRESHOLD", "0.55"))
+    SIMILARITY_THRESHOLD: float = float(os.getenv("SIMILARITY_THRESHOLD", "0.5"))
     MIN_CHUNKS_REQUIRED: int = int(os.getenv("MIN_CHUNKS_REQUIRED", "1"))
     
     # RAG generation settings
