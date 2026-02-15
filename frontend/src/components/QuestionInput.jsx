@@ -1,28 +1,18 @@
 import { useState } from 'react';
-import { queryDocuments } from '../services/api';
 import { motion } from 'framer-motion';
 
-function QuestionInput({ onQuerySuccess, onQueryStart, disabled }) {
+function QuestionInput({ onQueryStart, disabled, isLoading }) {
     const [question, setQuestion] = useState('');
-    const [isLoading, setIsLoading] = useState(false);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!question.trim() || disabled) return;
+        if (!question.trim() || disabled || isLoading) return;
 
-        setIsLoading(true);
-        if (onQueryStart) onQueryStart();
-
-        try {
-            const result = await queryDocuments(question);
-            onQuerySuccess(result);
-            setQuestion('');
-        } catch (error) {
-            console.error("Query failed:", error);
-            alert("Failed to get answer. Please try again.");
-        } finally {
-            setIsLoading(false);
+        // Delegate query handling entirely to the parent (App.jsx)
+        if (onQueryStart) {
+            onQueryStart(question);
         }
+        setQuestion('');
     };
 
     return (
@@ -70,3 +60,4 @@ function QuestionInput({ onQuerySuccess, onQueryStart, disabled }) {
 }
 
 export default QuestionInput;
+

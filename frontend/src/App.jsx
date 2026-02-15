@@ -206,6 +206,7 @@ function App() {
                   <QuestionInput
                     onQueryStart={handleQueryStart}
                     disabled={uploadedFiles.length === 0}
+                    isLoading={isQuerying}
                   />
                 </div>
 
