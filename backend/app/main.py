@@ -220,7 +220,7 @@ async def ingest_document(
         
         return {
             "message": f"Document '{file.filename}' ingested successfully",
-            "chunks_created": result["chunks_created"],
+            "chunks_created": result["num_chunks"],
             "filename": file.filename
         }
         
@@ -255,10 +255,16 @@ async def delete_document(filename: str, db: Session = Depends(get_db)):
     """Delete a document and all its chunks."""
     try:
         doc_service = DocumentService(db)
-        result = doc_service.delete_document(filename)
-        if not result["success"]:
-            raise HTTPException(status_code=404, detail=result.get("message", "Not found"))
-        return result
+        deleted_count = doc_service.delete_document(filename)
+        
+        if deleted_count == 0:
+            raise HTTPException(status_code=404, detail=f"Document '{filename}' not found")
+            
+        return {
+            "message": f"Document '{filename}' deleted successfully",
+            "chunks_deleted": deleted_count,
+            "success": True
+        }
     except HTTPException:
         raise
     except Exception as e:
