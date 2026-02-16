@@ -102,6 +102,75 @@ export default function AnswerDisplay({ answer, isLoading, isThinking, isStreami
         );
     }
 
+    // Fallback: Check if answer is a JSON string (for robustness)
+    let fallbackTableData = null;
+    if (answer?.answer && typeof answer.answer === 'string' && (answer.answer.trim().startsWith('[') || answer.answer.trim().startsWith('```json'))) {
+        try {
+            let cleanJson = answer.answer.trim();
+            if (cleanJson.startsWith('```json')) {
+                cleanJson = cleanJson.replace(/^```json/, '').replace(/```$/, '');
+            } else if (cleanJson.startsWith('```')) {
+                cleanJson = cleanJson.replace(/^```/, '').replace(/```$/, '');
+            }
+
+            // Try to find array brackets if there's text around it
+            const match = cleanJson.match(/\[.*\]/s);
+            if (match) {
+                cleanJson = match[0];
+            }
+
+            const parsed = JSON.parse(cleanJson);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+                const cols = Object.keys(parsed[0]);
+                fallbackTableData = { rows: parsed, columns: cols };
+            }
+        } catch (e) {
+            // Not valid JSON, ignore
+        }
+    }
+
+    if (fallbackTableData) {
+        return (
+            <div className="answer-display">
+                <div className="answer-header-row">
+                    <h2>Generated Analysis</h2>
+                    {!isStreaming && <ConfidenceBadge confidence={confidence} />}
+                </div>
+                <div className="overflow-x-auto rounded-lg border border-cyber-primary/20 shadow-[0_0_15px_rgba(0,212,255,0.05)] custom-scrollbar max-h-[500px] mt-4">
+                    <table className="w-full text-left border-collapse">
+                        <thead className="bg-gradient-to-r from-cyber-darker to-cyber-primary/10 sticky top-0 z-10">
+                            <tr>
+                                {fallbackTableData.columns.map((col, idx) => (
+                                    <th key={idx} className="p-3 text-xs font-bold text-cyber-primary uppercase tracking-wider border-b border-cyber-primary/20 whitespace-nowrap">
+                                        {col}
+                                    </th>
+                                ))}
+                            </tr>
+                        </thead>
+                        <tbody className="bg-cyber-darker/50 divide-y divide-white/5">
+                            {fallbackTableData.rows.map((row, rowIdx) => (
+                                <tr key={rowIdx} className="hover:bg-cyber-primary/5 transition-colors duration-200">
+                                    {fallbackTableData.columns.map((col, colIdx) => (
+                                        <td key={colIdx} className="p-3 text-sm text-cyber-text border-r border-white/5 last:border-r-0 whitespace-nowrap">
+                                            {typeof row[col] === 'object' ? JSON.stringify(row[col]) : row[col]}
+                                        </td>
+                                    ))}
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+                <div className="mt-4">
+                    <FeedbackButtons
+                        question={answer.question}
+                        answer={answer.answer}
+                        numChunksRetrieved={answer.num_chunks_retrieved}
+                    />
+                </div>
+            </div>
+        );
+    }
+
     // Display answer with skeleton or content
     return (
         <div className="answer-display">

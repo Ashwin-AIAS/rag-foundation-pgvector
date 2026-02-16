@@ -472,23 +472,27 @@ async def query_documents(
         
         if is_listing_intent:
             try:
-                clean_json = raw_answer.strip()
-                if clean_json.startswith("```json"):
-                    clean_json = clean_json[7:]
-                if clean_json.endswith("```"):
-                    clean_json = clean_json[:-3]
+                # robust cleaning: find first [ and last ]
+                import re
+                json_match = re.search(r'\[.*\]', raw_answer.replace('\n', ' '), re.DOTALL)
                 
-                parsed_data = json.loads(clean_json)
-                
-                if isinstance(parsed_data, list) and len(parsed_data) > 0:
-                    rows = parsed_data
-                    columns = list(rows[0].keys())
-                    answer_type = "table"
-                    final_answer = "Here is the structured list you requested:"
+                if json_match:
+                    clean_json = json_match.group(0)
+                    parsed_data = json.loads(clean_json)
+                    
+                    if isinstance(parsed_data, list) and len(parsed_data) > 0:
+                        rows = parsed_data
+                        columns = list(rows[0].keys())
+                        answer_type = "table"
+                        final_answer = "Here is the structured list you requested:"
+                    else:
+                        logging.warning("Structured mode returned invalid JSON structure (not a list), falling back to text.")
                 else:
-                    logging.warning("Structured mode returned invalid JSON, falling back to text.")
-            except json.JSONDecodeError:
-                logging.warning("Failed to parse JSON in structured mode, falling back to text.")
+                     logging.warning("Structured mode could not find JSON array in response.")
+            except json.JSONDecodeError as e:
+                logging.warning(f"Failed to parse JSON in structured mode: {e}, falling back to text.")
+            except Exception as e:
+                logging.warning(f"Unexpected error in structured mode: {e}")
         
         response_chunks = [
             RetrievedChunk(
