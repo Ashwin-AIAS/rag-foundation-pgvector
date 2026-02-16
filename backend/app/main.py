@@ -213,7 +213,7 @@ async def ingest_document(
             temp_path = tmp_file.name
         
         ingestion_service = DocumentIngestionService(db)
-        result = ingestion_service.ingest(
+        result = await ingestion_service.ingest_document(
             file_path=temp_path,
             filename=file.filename
         )
