@@ -213,6 +213,7 @@ async def ingest_document(
             temp_path = tmp_file.name
         
         ingestion_service = DocumentIngestionService(db)
+        logging.info(f"Uploading file: {file.filename} (v2)")
         result = await ingestion_service.ingest_document(
             file_path=temp_path,
             filename=file.filename
