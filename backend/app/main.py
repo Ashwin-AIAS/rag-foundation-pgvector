@@ -421,7 +421,9 @@ async def query_documents(
             )
         
         # Standard Text Response (or Structured Listing)
-        listing_keywords = ["list", "show", "display", "table", "jobs", "roles", "applications"]
+        # Only trigger structured JSON mode if user explicitly asks for a table/grid/csv.
+        # "list", "show", "display" should default to natural language (e.g. bullet points).
+        listing_keywords = ["table", "structured", "grid", "csv", "json"]
         is_listing_intent = any(kw in request.question.lower() for kw in listing_keywords)
         
         prompt = prompt_service.construct_prompt(
