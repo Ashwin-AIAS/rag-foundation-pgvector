@@ -104,7 +104,19 @@ class DocumentIngestionService:
 
         elif file_type == "csv":
             try:
-                df = pd.read_csv(file_path)
+                # Try different encodings for CSV files (Excel often uses cp1252/latin1)
+                encodings_to_try = ['utf-8', 'latin1', 'cp1252', 'iso-8859-1']
+                df = None
+                
+                for encoding in encodings_to_try:
+                    try:
+                        df = pd.read_csv(file_path, encoding=encoding)
+                        break
+                    except UnicodeDecodeError:
+                        continue
+                        
+                if df is None:
+                    raise ValueError("Failed to decode CSV with supported encodings (utf-8, latin1, cp1252)")
                 documents = []
                 # Process in chunks of rows to avoid huge single documents
                 row_chunk_size = 20
