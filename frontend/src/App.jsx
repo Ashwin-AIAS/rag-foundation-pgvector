@@ -154,6 +154,31 @@ function App() {
           (score) => setConfidence(score)
         );
 
+        if (typeof fullText === 'object') {
+          // It's a structured response (Table), not a text stream
+          receivedFirstToken = true;
+          setIsThinking(false);
+          setIsStreaming(false);
+          setCurrentAnswer(fullText);
+          if (fullText.confidence != null) setConfidence(fullText.confidence);
+
+          const newHistoryItem = {
+            id: Date.now().toString(),
+            question: question,
+            answer: fullText.answer,
+            retrieved_chunks: fullText.retrieved_chunks,
+            num_chunks_retrieved: fullText.num_chunks_retrieved,
+            timestamp: new Date().toISOString(),
+            isRefusal: false,
+            answer_type: fullText.answer_type,
+            rows: fullText.rows,
+            columns: fullText.columns
+          };
+          setConversationHistory(prev => [newHistoryItem, ...prev].slice(0, 50));
+          setIsQuerying(false);
+          return;
+        }
+
         if (controller.signal.aborted) return;
 
         // Streaming success — validate we got a real answer

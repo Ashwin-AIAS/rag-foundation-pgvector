@@ -107,6 +107,12 @@ export async function streamQuery(question, onUpdate, signal = null, selectedDoc
         throw new Error(`Streaming failed: HTTP ${response.status}`);
     }
 
+    // Check if the response is actually JSON (e.g. Table response)
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+        return await response.json();
+    }
+
     if (!response.body) {
         throw new Error("No response body");
     }
