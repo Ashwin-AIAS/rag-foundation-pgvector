@@ -137,6 +137,49 @@ class DocumentIngestionService:
             except Exception as e:
                 logging.error(f"Error loading CSV file: {e}")
                 raise ValueError(f"Failed to load CSV file: {str(e)}")
+
+        elif file_type in ["xlsx", "xls"]:
+            try:
+                # Use openpyxl for xlsx (default) or xlrd for xls (if installed/needed)
+                # Pandas read_excel handles this automatically if deps are present
+                df = pd.read_excel(file_path)
+                
+                # Convert date columns to string to avoid serialization issues
+                for col in df.select_dtypes(include=['datetime64']).columns:
+                    df[col] = df[col].astype(str)
+                    
+                documents = []
+                # Process in chunks of rows to avoid huge single documents
+                row_chunk_size = 20
+                
+                for i in range(0, len(df), row_chunk_size):
+                    chunk_df = df.iloc[i:i+row_chunk_size]
+                    text_block = ""
+                    chunk_rows = []
+                    
+                    for _, row in chunk_df.iterrows():
+                        # Create readable text for embedding
+                        row_dict = row.to_dict()
+                        # Handle NaN values
+                        clean_row = {k: v for k, v in row_dict.items() if pd.notna(v)}
+                        chunk_rows.append(clean_row)
+                        
+                        row_text = "\n".join([f"{col}: {val}" for col, val in clean_row.items()])
+                        text_block += row_text + "\n\n---\n\n"
+                    
+                    documents.append(Document(
+                        page_content=text_block, 
+                        metadata={
+                            "source": file_path, 
+                            "file_type": file_type, 
+                            "row_start": i,
+                            "row_data": chunk_rows  # Store raw data for table reconstruction
+                        }
+                    ))
+                return documents
+            except Exception as e:
+                logging.error(f"Error loading Excel file: {e}")
+                raise ValueError(f"Failed to load Excel file: {str(e)}")
                 
         else:
             raise ValueError(f"Unsupported file type: {file_type}")
