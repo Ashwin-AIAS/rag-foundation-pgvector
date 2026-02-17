@@ -365,16 +365,17 @@ async def query_documents(
         confidence = compute_confidence(reranked_chunks, rerank_succeeded)
         
         # Step 6: Construct prompt
-        # Check for table response
-        csv_chunks = [c for c in reranked_chunks if c.get("metadata", {}).get("file_type") == "csv"]
-        is_table_response = len(csv_chunks) > 0 and len(csv_chunks) >= len(reranked_chunks) * 0.5
+        # Check for table response (CSV, Excel)
+        structured_types = ["csv", "xlsx", "xls"]
+        structured_chunks = [c for c in reranked_chunks if c.get("metadata", {}).get("file_type") in structured_types]
+        is_table_response = len(structured_chunks) > 0 and len(structured_chunks) >= len(reranked_chunks) * 0.5
         
         prompt_service = PromptService()
         
         if is_table_response:
             all_rows = []
             seen_hashes = set()
-            for chunk in csv_chunks:
+            for chunk in structured_chunks:
                 row_data = chunk.get("metadata", {}).get("row_data", [])
                 if isinstance(row_data, list):
                     for row in row_data:
