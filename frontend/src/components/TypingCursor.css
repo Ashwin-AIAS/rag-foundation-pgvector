@@ -1,6 +1,6 @@
 .typing-cursor {
     display: inline-block;
-    color: #4fc3f7;
+    color: var(--primary-color, #4fc3f7);
     font-weight: 300;
     font-size: 1.1em;
     animation: cursor-blink 800ms step-end infinite;
@@ -17,5 +17,12 @@
 
     50% {
         opacity: 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .typing-cursor {
+        animation: none;
+        opacity: 1;
     }
 }
