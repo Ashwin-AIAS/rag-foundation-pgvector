@@ -107,6 +107,8 @@ Your role is to be a faithful representative of the provided documents, not a ge
             return "CONTEXT:\nNo relevant documents found."
         
         context_parts = ["CONTEXT:"]
+        current_length = 0
+        MAX_CONTEXT_LENGTH = 6000
         
         for i, chunk in enumerate(chunks, 1):
             source = chunk.get("source_file", "Unknown")
@@ -116,8 +118,18 @@ Your role is to be a faithful representative of the provided documents, not a ge
             
             # Format each chunk with clear source attribution
             chunk_header = f"\n[Document {i}: {source}, Chunk {chunk_idx}, Relevance: {score:.2f}]"
-            context_parts.append(chunk_header)
-            context_parts.append(text)
+            chunk_content = f"{chunk_header}\n{text}"
+            
+            # Check length constraint
+            if current_length + len(chunk_content) > MAX_CONTEXT_LENGTH:
+                # If this is the very first chunk and it's too long, truncate it
+                if current_length == 0:
+                     truncated_text = text[:MAX_CONTEXT_LENGTH - len(chunk_header) - 50] + "...(truncated)"
+                     context_parts.append(f"{chunk_header}\n{truncated_text}")
+                break
+            
+            context_parts.append(chunk_content)
+            current_length += len(chunk_content)
         
         return "\n".join(context_parts)
     

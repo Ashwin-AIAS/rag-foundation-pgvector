@@ -51,4 +51,5 @@ class QueryResponse(BaseModel):
     answer_type: str = Field("text", description="Type of answer: 'text' or 'table'")
     columns: Optional[List[str]] = Field(None, description="Column names for table response")
     rows: Optional[List[Dict[str, Any]]] = Field(None, description="Rows for table response")
+    debug_latency: Optional[Dict[str, float]] = Field(None, description="Latency breakdown in ms")
 

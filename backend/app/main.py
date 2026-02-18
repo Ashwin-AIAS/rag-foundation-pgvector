@@ -74,9 +74,20 @@ def create_query_logs_table():
                 )
             """))
             conn.commit()
-        logger.info("query_logs table ready")
+
+            # Ensure pgvector index exists for performance
+            # IVFFlat index is good for speed/recall balance
+            conn.execute(sa_text("""
+                CREATE INDEX IF NOT EXISTS document_chunks_embedding_idx
+                ON document_chunks
+                USING ivfflat (embedding vector_cosine_ops)
+                WITH (lists = 100);
+            """))
+            conn.commit()
+            
+        logger.info("Database initialized (query_logs table + vector index)")
     except Exception as e:
-        logger.error(f"Failed to create query_logs table: {e}")
+        logger.error(f"Failed to initialize database: {e}")
 
 
 # ── Utility: confidence scoring ──────────────────────────────
@@ -296,14 +307,21 @@ async def query_documents(
     if not request.question or not request.question.strip():
         raise HTTPException(status_code=400, detail="Question cannot be empty")
     
-    start_time = time.time()
+    # ── LATENCY ORCHESTRATION ──
+    start_total = time.perf_counter()
+    embed_time = 0.0
+    retrieval_time = 0.0
+    generation_time = 0.0
     
     try:
         # Step 1: Embed question
+        start_embed = time.perf_counter()
         embedding_service = EmbeddingService()
         query_embedding = embedding_service.embed_query(request.question)
+        embed_time = (time.perf_counter() - start_embed) * 1000
         
-        # Step 2: Retrieve top-K chunks (no threshold — always return best matches)
+        # Step 2: Retrieve top-K chunks
+        start_retrieval = time.perf_counter()
         retrieval_service = RetrievalService(db)
         initial_top_k = min(
             request.top_k if request.top_k is not None else RETRIEVAL_TOP_K,
@@ -323,19 +341,20 @@ async def query_documents(
             user_question=request.question,
         )
         logger.info(f"Retrieved {len(retrieved_chunks)} chunks")
-        # Debug: log top-5 similarity scores
-        for i, c in enumerate(retrieved_chunks[:5]):
-            logger.debug(
-                f"  chunk[{i}] sim={c['similarity_score']:.4f} "
-                f"kw={c.get('keyword_score', 0):.4f} "
-                f"final={c.get('final_score', 0):.4f} "
-                f"src={c['source_file']}"
-            )
         
-        # Step 3: Only refuse if the database returned ZERO rows
+        # Step 3: LLM Reranking (part of retrieval flow)
+        reranker = RerankingService()
+        reranked_chunks, rerank_succeeded = reranker.rerank(
+            question=request.question,
+            chunks=retrieved_chunks,
+            top_n=RERANK_RETURN,
+        )
+        retrieval_time = (time.perf_counter() - start_retrieval) * 1000
+        
+        # Step 4: Handle "No Context" case
         if len(retrieved_chunks) == 0:
-            elapsed_ms = int((time.time() - start_time) * 1000)
-            log_query(db, request.question, elapsed_ms, 0,
+            total_time = (time.perf_counter() - start_total) * 1000
+            log_query(db, request.question, int(total_time), 0,
                       request.selected_documents, 0, False)
             
             fallback_msg = "No relevant content was found in the selected documents."
@@ -351,28 +370,28 @@ async def query_documents(
                 num_chunks_retrieved=0,
                 question=request.question,
                 confidence=0,
+                debug_latency={
+                    "embedding_ms": round(embed_time, 2),
+                    "retrieval_ms": round(retrieval_time, 2),
+                    "generation_ms": 0.0,
+                    "total_ms": round(total_time, 2)
+                }
             )
-        
-        # Step 4: LLM Reranking
-        reranker = RerankingService()
-        reranked_chunks, rerank_succeeded = reranker.rerank(
-            question=request.question,
-            chunks=retrieved_chunks,
-            top_n=RERANK_RETURN,
-        )
         
         # Step 5: Compute confidence
         confidence = compute_confidence(reranked_chunks, rerank_succeeded)
         
         # Step 6: Construct prompt
-        # Check for table response (CSV, Excel)
         structured_types = ["csv", "xlsx", "xls"]
         structured_chunks = [c for c in reranked_chunks if c.get("metadata", {}).get("file_type") in structured_types]
         is_table_response = len(structured_chunks) > 0 and len(structured_chunks) >= len(reranked_chunks) * 0.5
         
         prompt_service = PromptService()
         
+        # ── TABLE RESPONSE FLOW ──
         if is_table_response:
+            start_generation = time.perf_counter()
+            
             all_rows = []
             seen_hashes = set()
             for chunk in structured_chunks:
@@ -393,6 +412,16 @@ async def query_documents(
             generation_service = GenerationService()
             summary_answer = generation_service.generate(prompt)
             
+            generation_time = (time.perf_counter() - start_generation) * 1000
+            total_time = (time.perf_counter() - start_total) * 1000
+            
+            # Structured Logging
+            print(f"\nQuery: {request.question}")
+            print(f"Embedding time: {embed_time:.2f}ms")
+            print(f"Retrieval time: {retrieval_time:.2f}ms")
+            print(f"Generation time: {generation_time:.2f}ms")
+            print(f"Total time: {total_time:.2f}ms\n")
+            
             response_chunks = [
                 RetrievedChunk(
                     chunk_text=chunk["chunk_text"],
@@ -404,10 +433,7 @@ async def query_documents(
                 for chunk in reranked_chunks
             ]
             
-            elapsed_ms = int((time.time() - start_time) * 1000)
-            if elapsed_ms > SLOW_QUERY_THRESHOLD * 1000:
-                logger.warning(f"SLOW QUERY ({elapsed_ms}ms): {request.question[:80]}")
-            log_query(db, request.question, elapsed_ms, confidence,
+            log_query(db, request.question, int(total_time), confidence,
                       request.selected_documents, len(response_chunks), rerank_succeeded)
             
             return QueryResponse(
@@ -418,12 +444,16 @@ async def query_documents(
                 confidence=confidence,
                 answer_type="table",
                 columns=columns,
-                rows=all_rows[:50]
+                rows=all_rows[:50],
+                debug_latency={
+                    "embedding_ms": round(embed_time, 2),
+                    "retrieval_ms": round(retrieval_time, 2),
+                    "generation_ms": round(generation_time, 2),
+                    "total_ms": round(total_time, 2)
+                }
             )
         
-        # Standard Text Response (or Structured Listing)
-        # Only trigger structured JSON mode if user explicitly asks for a table/grid/csv.
-        # "list", "show", "display" should default to natural language (e.g. bullet points).
+        # ── TEXT RESPONSE FLOW ──
         listing_keywords = ["table", "structured", "grid", "csv", "json"]
         is_listing_intent = any(kw in request.question.lower() for kw in listing_keywords)
         
@@ -437,36 +467,45 @@ async def query_documents(
         
         # STREAMING LOGIC
         if stream:
-            try:
-                logger.info(f"Starting stream — prompt length: {len(prompt)} chars")
-                # For streaming we can't compute answer-level analytics easily,
-                # so we log what we know now
-                elapsed_ms = int((time.time() - start_time) * 1000)
-                log_query(db, request.question, elapsed_ms, confidence,
-                          request.selected_documents, len(reranked_chunks), rerank_succeeded)
-                
-                # Wrap stream to prepend confidence metadata and guarantee non-empty output
-                def stream_with_meta():
-                    yield f"__CONFIDENCE__:{confidence}\n"
-                    yielded_any = False
-                    for token in generation_service.stream_generate(prompt):
-                        if token:
-                            yielded_any = True
-                            yield token
-                    if not yielded_any:
-                        logger.warning("Streaming generated zero tokens — emitting fallback")
-                        yield "No answer could be generated from the selected documents."
-                
-                return StreamingResponse(
-                    stream_with_meta(),
-                    media_type="text/plain"
-                )
-            except Exception as e:
-                logger.error(f"Streaming setup failed, falling back to standard: {e}")
-                # Fall through to standard (non-streaming) logic below
+            # For streaming, we log initial timings but total/generation is unknown
+            # Logging partial timing
+            print(f"\nQuery: {request.question} (Streaming)")
+            print(f"Embedding time: {embed_time:.2f}ms")
+            print(f"Retrieval time: {retrieval_time:.2f}ms")
+            
+            log_query(db, request.question, int((time.perf_counter() - start_total) * 1000), confidence,
+                      request.selected_documents, len(reranked_chunks), rerank_succeeded)
+            
+            def stream_with_meta():
+                # We can't inject debug_latency JSON here easily without breaking the stream format
+                # keeping it simple as requested
+                yield f"__CONFIDENCE__:{confidence}\n"
+                yielded_any = False
+                for token in generation_service.stream_generate(prompt):
+                    if token:
+                        yielded_any = True
+                        yield token
+                if not yielded_any:
+                    logger.warning("Streaming generated zero tokens — emitting fallback")
+                    yield "No answer could be generated from the selected documents."
+            
+            return StreamingResponse(
+                stream_with_meta(),
+                media_type="text/plain"
+            )
         
-        # STANDARD LOGIC
+        # STANDARD GENERATION
+        start_generation = time.perf_counter()
         raw_answer = generation_service.generate(prompt)
+        generation_time = (time.perf_counter() - start_generation) * 1000
+        total_time = (time.perf_counter() - start_total) * 1000
+        
+        # Structured Logging
+        print(f"\nQuery: {request.question}")
+        print(f"Embedding time: {embed_time:.2f}ms")
+        print(f"Retrieval time: {retrieval_time:.2f}ms")
+        print(f"Generation time: {generation_time:.2f}ms")
+        print(f"Total time: {total_time:.2f}ms\n")
         
         rows = None
         columns = None
@@ -475,7 +514,6 @@ async def query_documents(
         
         if is_listing_intent:
             try:
-                # robust cleaning: find first [ and last ]
                 import re
                 json_match = re.search(r'\[.*\]', raw_answer.replace('\n', ' '), re.DOTALL)
                 
@@ -489,13 +527,11 @@ async def query_documents(
                         answer_type = "table"
                         final_answer = "Here is the structured list you requested:"
                     else:
-                        logging.warning("Structured mode returned invalid JSON structure (not a list), falling back to text.")
+                        logging.warning("Structured mode returned invalid JSON structure.")
                 else:
-                     logging.warning("Structured mode could not find JSON array in response.")
-            except json.JSONDecodeError as e:
-                logging.warning(f"Failed to parse JSON in structured mode: {e}, falling back to text.")
+                     logging.warning("Structured mode could not find JSON array.")
             except Exception as e:
-                logging.warning(f"Unexpected error in structured mode: {e}")
+                logging.warning(f"Failed to parse JSON in structured mode: {e}")
         
         response_chunks = [
             RetrievedChunk(
@@ -508,10 +544,7 @@ async def query_documents(
             for chunk in reranked_chunks
         ]
         
-        elapsed_ms = int((time.time() - start_time) * 1000)
-        if elapsed_ms > SLOW_QUERY_THRESHOLD * 1000:
-            logger.warning(f"SLOW QUERY ({elapsed_ms}ms): {request.question[:80]}")
-        log_query(db, request.question, elapsed_ms, confidence,
+        log_query(db, request.question, int(total_time), confidence,
                   request.selected_documents, len(response_chunks), rerank_succeeded)
         
         return QueryResponse(
@@ -522,7 +555,13 @@ async def query_documents(
             confidence=confidence,
             answer_type=answer_type,
             columns=columns,
-            rows=rows
+            rows=rows,
+            debug_latency={
+                "embedding_ms": round(embed_time, 2),
+                "retrieval_ms": round(retrieval_time, 2),
+                "generation_ms": round(generation_time, 2),
+                "total_ms": round(total_time, 2)
+            }
         )
     
     except ValueError as e:

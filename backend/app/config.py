@@ -24,8 +24,8 @@ class Settings:
     SUPPORTED_FILE_TYPES: list = ["pdf", "txt", "docx", "md", "csv", "xlsx", "xls"]
     
     # RAG retrieval settings
-    TOP_K: int = int(os.getenv("TOP_K", "8"))
-    SIMILARITY_THRESHOLD: float = float(os.getenv("SIMILARITY_THRESHOLD", "0.5"))
+    TOP_K: int = int(os.getenv("TOP_K", "5"))
+    SIMILARITY_THRESHOLD: float = float(os.getenv("SIMILARITY_THRESHOLD", "0.7"))
     MIN_CHUNKS_REQUIRED: int = int(os.getenv("MIN_CHUNKS_REQUIRED", "1"))
     
     # RAG generation settings
