@@ -145,7 +145,45 @@ class RetrievalService:
                         ORDER BY final_score DESC
                         LIMIT :limit
                     """)
-                    result = self.db.execute(query, params)
+                    try:
+                        result = self.db.execute(query, params)
+                    except Exception as fallback_e:
+                        # Check if failure is due to 'chunk_metadata' column missing (Old Schema)
+                        if "chunk_metadata" in str(fallback_e) and ("UndefinedColumn" in str(fallback_e) or "does not exist" in str(fallback_e)):
+                             logger.warning("chunk_metadata column missing. Trying legacy 'metadata' column.")
+                             
+                             # Reconstruct query using 'metadata' instead of 'chunk_metadata'
+                             query = text(f"""
+                                SELECT 
+                                    chunk_text,
+                                    source_file,
+                                    chunk_index,
+                                    metadata AS chunk_metadata,
+                                    1 - (embedding <=> :query_embedding) AS vector_score,
+                                    COALESCE(
+                                        ts_rank(
+                                            to_tsvector('english', chunk_text),
+                                            plainto_tsquery('english', :query_text)
+                                        ),
+                                        0
+                                    ) AS keyword_score,
+                                    (0.7 * (1 - (embedding <=> :query_embedding)))
+                                    + (0.3 * COALESCE(
+                                        ts_rank(
+                                            to_tsvector('english', chunk_text),
+                                            plainto_tsquery('english', :query_text)
+                                        ),
+                                        0
+                                    )) AS final_score
+                                FROM document_chunks
+                                WHERE {where_sql}
+                                ORDER BY final_score DESC
+                                LIMIT :limit
+                            """)
+                             result = self.db.execute(query, params)
+                        else:
+                            logger.error(f"Fallback query FAILED: {fallback_e}")
+                            raise fallback_e
                 else:
                     # If not using keyword, the error shouldn't happen unless something else is wrong
                     raise e
