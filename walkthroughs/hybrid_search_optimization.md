@@ -46,9 +46,11 @@ If you encounter `UndefinedColumn: column document_chunks.search_vector does not
 
 ### 6. Production Fallback (Robustness)
 
-- Added `try-except` block in `retrieval_service.py` to catch `UndefinedColumn` errors.
-- If the production database is missing the `search_vector` column, the system automatically falls back to calculating vectors on-the-fly (`to_tsvector`).
-- This ensures the application remains functional even if database migrations haven't been applied in production.
+- Added **Double Fallback** mechanism in `retrieval_service.py`:
+  1. Tries optimized query with `search_vector`.
+  2. If `search_vector` is missing, falls back to legacy query with `chunk_metadata`.
+  3. If `chunk_metadata` is missing (Old Schema), tries legacy query with `metadata` column.
+- This ensures compatibility with all database schema versions (v1 and v2) in production.
 
 ## Verification Results
 
