@@ -50,6 +50,7 @@ If you encounter `UndefinedColumn: column document_chunks.search_vector does not
   1. Tries optimized query with `search_vector`.
   2. If `search_vector` is missing, falls back to legacy query with `chunk_metadata`.
   3. If `chunk_metadata` is missing (Old Schema), tries legacy query with `metadata` column.
+- **Transaction Safety**: Added explicit `db.rollback()` to prevent `InFailedSqlTransaction` errors when the primary query fails.
 - This ensures compatibility with all database schema versions (v1 and v2) in production.
 
 ## Verification Results
