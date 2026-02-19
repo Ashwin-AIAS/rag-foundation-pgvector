@@ -44,6 +44,12 @@ If you encounter `UndefinedColumn: column document_chunks.search_vector does not
 
 - Switched from `bulk_save_objects` to `db.add_all()` in `ingestion.py` to correctly handle `Computed` columns. `bulk_save_objects` can fail with `UndefinedColumn` if it tries to insert values into generated columns.
 
+### 6. Production Fallback (Robustness)
+
+- Added `try-except` block in `retrieval_service.py` to catch `UndefinedColumn` errors.
+- If the production database is missing the `search_vector` column, the system automatically falls back to calculating vectors on-the-fly (`to_tsvector`).
+- This ensures the application remains functional even if database migrations haven't been applied in production.
+
 ## Verification Results
 
 ### Automated Verification
