@@ -110,13 +110,18 @@ class RetrievalService:
             """)
         
         try:
+            # Attempt Hybrid Search (requires search_vector column)
             result = self.db.execute(query, params)
         except Exception as e:
+            # CRITICAL FIX: Rollback the failed transaction immediately
+            self.db.rollback()
+            
             # Fallback for Missing Column (e.g. Production DB not updated)
             if "UndefinedColumn" in str(e) or "does not exist" in str(e):
-                logger.warning("search_vector column missing. Falling back to legacy on-the-fly calculation.")
+                logger.warning(f"Hybrid search failed (Schema Mismatch). Rolling back and switching to fallback. Error: {e}")
                 
                 if use_keyword:
+                    logger.info("Fallback Mode: Active (On-the-fly tsvector calculation)")
                     # Reconstruct query using to_tsvector() instead of search_vector column
                     query = text(f"""
                         SELECT 
@@ -148,6 +153,8 @@ class RetrievalService:
                     try:
                         result = self.db.execute(query, params)
                     except Exception as fallback_e:
+                        self.db.rollback() # Ensure cleanliness even after fallback failure
+                        
                         # Check if failure is due to 'chunk_metadata' column missing (Old Schema)
                         if "chunk_metadata" in str(fallback_e) and ("UndefinedColumn" in str(fallback_e) or "does not exist" in str(fallback_e)):
                              logger.warning("chunk_metadata column missing. Trying legacy 'metadata' column.")
@@ -188,6 +195,7 @@ class RetrievalService:
                     # If not using keyword, the error shouldn't happen unless something else is wrong
                     raise e
             else:
+                # If it's not a column error, re-raise
                 raise e
 
         chunks = []
