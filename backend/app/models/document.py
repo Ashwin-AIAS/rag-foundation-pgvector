@@ -23,7 +23,9 @@ class DocumentChunk(Base):
     
     # Computed column for hybrid search (matches DB migration)
     # Note: 'persisted=True' corresponds to 'STORED' in PostgreSQL
-    search_vector = Column(TSVECTOR, Computed("to_tsvector('english', chunk_text)", persisted=True))
+    # COMMENTED OUT to prevent "UndefinedColumn" errors in SQLAlchemy.
+    # The column exists in DB and is used via raw SQL in retrieval_service.py.
+    # search_vector = Column(TSVECTOR, Computed("to_tsvector('english', chunk_text)", persisted=True))
     
     created_at = Column(TIMESTAMP, server_default=func.now())
     
