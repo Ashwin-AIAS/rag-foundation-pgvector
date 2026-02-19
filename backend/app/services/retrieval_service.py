@@ -75,7 +75,7 @@ class RetrievalService:
                     1 - (embedding <=> :query_embedding) AS vector_score,
                     COALESCE(
                         ts_rank(
-                            to_tsvector('english', chunk_text),
+                            search_vector,
                             plainto_tsquery('english', :query_text)
                         ),
                         0
@@ -83,7 +83,7 @@ class RetrievalService:
                     (0.7 * (1 - (embedding <=> :query_embedding)))
                     + (0.3 * COALESCE(
                         ts_rank(
-                            to_tsvector('english', chunk_text),
+                            search_vector,
                             plainto_tsquery('english', :query_text)
                         ),
                         0

@@ -1,5 +1,5 @@
-from sqlalchemy import Column, Integer, String, Text, TIMESTAMP, Index, UniqueConstraint
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import Column, Integer, String, Text, TIMESTAMP, Index, UniqueConstraint, Computed
+from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
 from sqlalchemy.sql import func
 from pgvector.sqlalchemy import Vector
 from app.database import Base
@@ -20,6 +20,11 @@ class DocumentChunk(Base):
     chunk_text = Column(Text, nullable=False)
     embedding = Column(Vector(768))  # Gemini text-embedding-004 produces 768-dimensional embeddings
     chunk_metadata = Column(JSONB)  # Renamed from 'metadata' to avoid SQLAlchemy reserved keyword
+    
+    # Computed column for hybrid search (matches DB migration)
+    # Note: 'persisted=True' corresponds to 'STORED' in PostgreSQL
+    search_vector = Column(TSVECTOR, Computed("to_tsvector('english', chunk_text)", persisted=True))
+    
     created_at = Column(TIMESTAMP, server_default=func.now())
     
     # Ensure unique chunks per document
