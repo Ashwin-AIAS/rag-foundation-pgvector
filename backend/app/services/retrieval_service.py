@@ -111,20 +111,57 @@ class RetrievalService:
         
         try:
             result = self.db.execute(query, params)
-            
-            chunks = []
-            for row in result:
-                chunks.append({
-                    "chunk_text": row.chunk_text,
-                    "source_file": row.source_file,
-                    "chunk_index": row.chunk_index,
-                    "metadata": row.chunk_metadata,
-                    "similarity_score": float(row.vector_score),
-                    "keyword_score": float(row.keyword_score),
-                    "final_score": float(row.final_score),
-                })
-            
-            return chunks
-            
         except Exception as e:
-            raise Exception(f"Retrieval failed: {str(e)}")
+            # Fallback for Missing Column (e.g. Production DB not updated)
+            if "UndefinedColumn" in str(e) or "does not exist" in str(e):
+                logger.warning("search_vector column missing. Falling back to legacy on-the-fly calculation.")
+                
+                if use_keyword:
+                    # Reconstruct query using to_tsvector() instead of search_vector column
+                    query = text(f"""
+                        SELECT 
+                            chunk_text,
+                            source_file,
+                            chunk_index,
+                            chunk_metadata,
+                            1 - (embedding <=> :query_embedding) AS vector_score,
+                            COALESCE(
+                                ts_rank(
+                                    to_tsvector('english', chunk_text),
+                                    plainto_tsquery('english', :query_text)
+                                ),
+                                0
+                            ) AS keyword_score,
+                            (0.7 * (1 - (embedding <=> :query_embedding)))
+                            + (0.3 * COALESCE(
+                                ts_rank(
+                                    to_tsvector('english', chunk_text),
+                                    plainto_tsquery('english', :query_text)
+                                ),
+                                0
+                            )) AS final_score
+                        FROM document_chunks
+                        WHERE {where_sql}
+                        ORDER BY final_score DESC
+                        LIMIT :limit
+                    """)
+                    result = self.db.execute(query, params)
+                else:
+                    # If not using keyword, the error shouldn't happen unless something else is wrong
+                    raise e
+            else:
+                raise e
+
+        chunks = []
+        for row in result:
+            chunks.append({
+                "chunk_text": row.chunk_text,
+                "source_file": row.source_file,
+                "chunk_index": row.chunk_index,
+                "metadata": row.chunk_metadata,
+                "similarity_score": float(row.vector_score),
+                "keyword_score": float(row.keyword_score),
+                "final_score": float(row.final_score),
+            })
+        
+        return chunks

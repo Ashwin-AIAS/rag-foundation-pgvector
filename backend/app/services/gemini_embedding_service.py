@@ -64,26 +64,12 @@ class GeminiEmbeddingService:
                            else:
                                embeddings.extend(batch_embeddings)
                     else:
-                        # Empty?
-                         pass
+                        print(f"DEBUG: Empty embedding list returned for batch {i}")
                 else:
-                    # Fallback or error
-                    pass
+                    print(f"DEBUG: 'embedding' key missing in result: {result}")
+                    raise ValueError("No embedding returned from API")
                  
             except Exception as e:
-                # Result might not support list in older versions, fallback to loop if strictly needed
-                # But requirement is to OPTIMIZE API calls, so we assume we can.
-                # If this fails, we might need 'batch_embed_contents' (new SDK method name)
-                # Let's try 'batch_embed_contents' if the above fails or simply use it if we are sure.
-                # Inspecting 'google.generativeai' documentation from search:
-                # "embed_content" for single, "batch_embed_contents" for multiple?
-                # Actually, main.py uses "embed_content".
-                # Let's use a safe try-except block to handle method names if needed, 
-                # but standardizing on `embed_content` with list is the most "correct" first attempt for "embed_documents".
-                # WAIT: The search result summary mentioned `client.batches.create_embeddings` for async batch.
-                # But we want synchronous efficient batching for the ingestion.
-                # We will implement a robust batch loop that tries to send the list.
-                
                 print(f"Batch embedding failed, falling back to sequential: {e}")
                 for text in batch:
                     try:
@@ -96,10 +82,11 @@ class GeminiEmbeddingService:
                          embeddings.append(res['embedding'])
                     except Exception as inner_e:
                         print(f"Error embedding chunk: {inner_e}")
-                        # Append zero vector or skip? Better to consistency fail or fill.
-                        # We'll re-raise to fail the ingestion of this document
                         raise inner_e
-
+        
+        if len(embeddings) != len(texts):
+            print(f"ERROR: Generated {len(embeddings)} embeddings for {len(texts)} texts.")
+            
         return embeddings
     
     def embed_query(self, text: str) -> List[float]:
