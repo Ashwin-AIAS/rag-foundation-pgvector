@@ -40,6 +40,10 @@ If you encounter `UndefinedColumn: column document_chunks.search_vector does not
    CREATE INDEX IF NOT EXISTS idx_document_chunks_search_vector ON document_chunks USING GIN (search_vector);
    ```
 
+### 5. Ingestion Fix (Computed Columns)
+
+- Switched from `bulk_save_objects` to `db.add_all()` in `ingestion.py` to correctly handle `Computed` columns. `bulk_save_objects` can fail with `UndefinedColumn` if it tries to insert values into generated columns.
+
 ## Verification Results
 
 ### Automated Verification

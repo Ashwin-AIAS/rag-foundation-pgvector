@@ -341,8 +341,8 @@ class DocumentIngestionService:
                 )
                 db_chunks.append(db_chunk)
             
-            # Bulk save using bulk_save_objects for performance
-            self.db.bulk_save_objects(db_chunks)
+            # Bulk save            # Use add_all instead of bulk_save_objects to correctly handle Computed columns
+            self.db.add_all(db_chunks)
             self.db.commit()
             
             return len(db_chunks)
