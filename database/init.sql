@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS document_chunks (
     chunk_text TEXT NOT NULL,
     embedding vector(768),  -- Gemini text-embedding-004 produces 768-dimensional embeddings
     chunk_metadata JSONB,  -- Renamed from metadata to avoid SQLAlchemy reserved keyword
+    search_vector TSVECTOR GENERATED ALWAYS AS (to_tsvector('english', chunk_text)) STORED,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     
     -- Ensure unique chunks per document
@@ -30,6 +31,11 @@ ON document_chunks (source_file);
 CREATE INDEX IF NOT EXISTS document_chunks_metadata_idx 
 ON document_chunks 
 USING gin (chunk_metadata);
+
+-- Create an index on search_vector for faster full-text keyword search
+CREATE INDEX IF NOT EXISTS idx_document_chunks_search_vector
+ON document_chunks
+USING GIN (search_vector);
 
 -- Table for storing user feedback on generated answers
 -- This data is for analysis only and does NOT modify system behavior
