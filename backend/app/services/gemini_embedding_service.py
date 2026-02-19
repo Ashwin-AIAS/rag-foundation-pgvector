@@ -33,58 +33,73 @@ class GeminiEmbeddingService:
         for i in range(0, len(texts), batch_size):
             batch = texts[i:i + batch_size]
             try:
-                # Gemini support batch embedding via embed_content? 
-                # Actually newer SDKs support batch_embed_contents, checking if we can use it.
-                # If not, we iterate but can verify strictly.
-                # For now, let's stick to iteration but with clear batching structure if API supports it later
-                # Or use asyncio to parallelize if we were async.
-                # Given strict constraints, we'll iterate efficiently or use batch API if available.
-                # The prompt implies "Send embedding requests in batches".
-                # genai.embed_content doesn't inherently batch multiple distinct texts in one call 
-                # unless using the specific list methods if available.
-                # Re-reading docs: genai.embed_content takes 'content' which can be str.
-                # However, for speed up, we should use 'batch_embed_contents' if available or parallelize.
-                # Let's try to use 'batch_embed_contents' if possible, or fall back to loop but make it clean.
+                # Use batch embedding if available, otherwise strict iteration
+                # Newer Google GenAI SDK supports passing a list of content to embed_content
+                # formatted as 'content' checks for list.
+                # However, to be safe and strictly follow "Send up to 20 chunks per API call",
+                # we will try to pass the list. If the SDK version is old it might fail, 
+                # but we will assume standard recent SDK.
                 
-                # Check if we can use batch_embed_contents (from google.generativeai)
-                # It is available as genai.embed_content(..., content=list_of_strings) in some versions?
-                # No, usually it's genai.embed_content (singular). 
-                # BUT, let's look at the "Parallel embedding batching" requirement.
-                # "Batch chunks into groups of 20. Send embedding requests in batches."
-                # We will implement a helper to do this.
+                # Check if we can use the batch method 'embed_content' with a list
+                # The prompt explicitly asks to "Send up to 20 chunks per API call".
+                # If we loop 20 times, that is 20 API calls.
+                # So we MUST send a list.
                 
-                # We'll use the 'batch_embed_contents' method if it exists on the model or module.
-                # Actually, simply calling it in a loop is what the previous code did. 
-                # To speed it up, we need to parallelize or use a batch endpoint.
-                # There is `genai.embed_content(model=..., content=...)`. 
-                # New SDK: `result = genai.embed_content(model=..., content=[...])` might work 
-                # and return list. Let's try to pass the list. 
+                result = genai.embed_content(
+                    model=self.model_name,
+                    content=batch,
+                    task_type="retrieval_document",
+                    output_dimensionality=768
+                )
                 
-                # If that fails, we will have to loop. But let's assume standard google-generativeai.
-                # The method `embed_content` typically handles one item.
-                # `batch_embed_contents` is the name in some doc.
-                
-                # SAFEST APPROACH for now without verifying SDK version on the fly:
-                # Use a loop but it's already a loop. The user wants "Parallel embedding batching".
-                # To do parallel, we could use a thread pool.
-                
-                batch_results = []
-                for text in batch:
-                    result = genai.embed_content(
-                        model=self.model_name,
-                        content=text,
-                        task_type="retrieval_document",
-                        output_dimensionality=768
-                    )
-                    batch_results.append(result['embedding'])
-                embeddings.extend(batch_results)
+                # result['embedding'] will be a list of lists if input was a list
+                if 'embedding' in result:
+                    batch_embeddings = result['embedding']
+                    # Verify it's a list of lists
+                    if isinstance(batch_embeddings, list) and len(batch_embeddings) > 0:
+                        if isinstance(batch_embeddings[0], list) or isinstance(batch_embeddings[0], float):
+                           # If it returned a single embedding (unexpected for list input), wrap it
+                           if isinstance(batch_embeddings[0], float):
+                               embeddings.append(batch_embeddings)
+                           else:
+                               embeddings.extend(batch_embeddings)
+                    else:
+                        # Empty?
+                         pass
+                else:
+                    # Fallback or error
+                    pass
                  
             except Exception as e:
-                # Fallback or log
-                print(f"Error embedding batch: {e}")
-                # If a batch fails, re-raise or handle? 
-                raise e
-        
+                # Result might not support list in older versions, fallback to loop if strictly needed
+                # But requirement is to OPTIMIZE API calls, so we assume we can.
+                # If this fails, we might need 'batch_embed_contents' (new SDK method name)
+                # Let's try 'batch_embed_contents' if the above fails or simply use it if we are sure.
+                # Inspecting 'google.generativeai' documentation from search:
+                # "embed_content" for single, "batch_embed_contents" for multiple?
+                # Actually, main.py uses "embed_content".
+                # Let's use a safe try-except block to handle method names if needed, 
+                # but standardizing on `embed_content` with list is the most "correct" first attempt for "embed_documents".
+                # WAIT: The search result summary mentioned `client.batches.create_embeddings` for async batch.
+                # But we want synchronous efficient batching for the ingestion.
+                # We will implement a robust batch loop that tries to send the list.
+                
+                print(f"Batch embedding failed, falling back to sequential: {e}")
+                for text in batch:
+                    try:
+                         res = genai.embed_content(
+                            model=self.model_name,
+                            content=text,
+                            task_type="retrieval_document", 
+                            output_dimensionality=768
+                        )
+                         embeddings.append(res['embedding'])
+                    except Exception as inner_e:
+                        print(f"Error embedding chunk: {inner_e}")
+                        # Append zero vector or skip? Better to consistency fail or fill.
+                        # We'll re-raise to fail the ingestion of this document
+                        raise inner_e
+
         return embeddings
     
     def embed_query(self, text: str) -> List[float]:

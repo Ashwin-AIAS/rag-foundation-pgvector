@@ -1,5 +1,6 @@
 import os
 import logging
+import time
 from typing import List, Dict, Any
 from pathlib import Path
 from sqlalchemy.orm import Session
@@ -234,40 +235,44 @@ class DocumentIngestionService:
             Dictionary with ingestion summary
         """
         # 1. Duplicate Detection
+        start_total = time.perf_counter()
+        
         existing = self.db.query(DocumentChunk).filter(
             DocumentChunk.source_file == filename
         ).first()
         
         if existing:
             logging.warning(f"Duplicate document detected: {filename}")
-            # Raise a specific exception or return a status that can be handled as 409
-            # Since this is a service method, we'll raise a ValueError that the controller can catch
-            # Or better, we define a custom DuplicateDocumentError in the controller or here.
-            # For now, we'll use ValueError with a specific message.
             raise ValueError(f"Document '{filename}' already exists.")
 
         # Determine file type
         file_extension = Path(filename).suffix.lower().lstrip('.')
         
-        # 2. Load document (Blocking I/O, so we might want to run in thread if huge, 
-        # but for simplicity and since libraries are sync, we call directly or could use run_in_executor)
-        # For this step, standard call is fine as we are in an async def but doing blocking calls.
-        # Ideally: documents = await run_in_threadpool(self.load_document, file_path, file_extension)
+        # 2. Load document
+        start_read = time.perf_counter()
         documents = self.load_document(file_path, file_extension)
+        file_read_ms = (time.perf_counter() - start_read) * 1000
         
         if not documents:
             return {"filename": filename, "status": "empty", "num_chunks": 0}
 
         # 3. Split into chunks
+        start_chunk = time.perf_counter()
         chunks = self.split_documents(documents)
+        chunking_ms = (time.perf_counter() - start_chunk) * 1000
         logging.info(f"Split {filename} into {len(chunks)} chunks.")
         
         # 4. Generate embeddings in batches
         texts = [chunk.page_content for chunk in chunks]
         embeddings = []
         
-        # We'll batch here if the service doesn't handled it, but we updated the service to take a list.
-        # We will log progress.
+        start_embed = time.perf_counter()
+        # We can pass all texts to embed_documents now as it handles batching, 
+        # but to keep the progress logging we'll loop here.
+        # Actually, let's trust the service and sending all at once might be better if the service was async, 
+        # but here the service is sync.
+        # Let's keep the loop for logging clarity as requested (return embeddings in correct order is guaranteed by service)
+        
         total_chunks = len(texts)
         batch_size = 20
         
@@ -275,21 +280,37 @@ class DocumentIngestionService:
             batch_texts = texts[i:i + batch_size]
             logging.info(f"Embedding batch {i//batch_size + 1}/{(total_chunks + batch_size - 1)//batch_size} for {filename}")
             
-            # Call embedding service (still sync for now as per library, but batched)
+            # Call embedding service
             batch_embeddings = self.embeddings.embed_documents(batch_texts)
             embeddings.extend(batch_embeddings)
+            
+        embedding_ms = (time.perf_counter() - start_embed) * 1000
 
         # 5. Store in database (Bulk insert)
         logging.info(f"Storing {len(chunks)} chunks for {filename}...")
+        start_db = time.perf_counter()
         num_chunks = self.store_chunks(chunks, embeddings, filename)
+        db_insert_ms = (time.perf_counter() - start_db) * 1000
         
+        total_ms = (time.perf_counter() - start_total) * 1000
+        
+        metrics = {
+            "file_read_ms": round(file_read_ms, 2),
+            "chunking_ms": round(chunking_ms, 2),
+            "embedding_ms": round(embedding_ms, 2),
+            "db_insert_ms": round(db_insert_ms, 2),
+            "total_ms": round(total_ms, 2)
+        }
+        
+        logging.info(f"INGEST_METRICS: {metrics}")
         logging.info(f"Ingestion complete for {filename}")
         
         return {
             "filename": filename,
             "num_chunks": num_chunks,
             "num_pages": len(documents),
-            "status": "success"
+            "status": "success",
+            "metrics": metrics
         }
 
     def store_chunks(
@@ -320,8 +341,8 @@ class DocumentIngestionService:
                 )
                 db_chunks.append(db_chunk)
             
-            # Bulk save
-            self.db.add_all(db_chunks)
+            # Bulk save using bulk_save_objects for performance
+            self.db.bulk_save_objects(db_chunks)
             self.db.commit()
             
             return len(db_chunks)
