@@ -42,7 +42,7 @@ app = FastAPI(
 # Configure CORS
 allowed_origins_str = os.getenv(
     "ALLOWED_ORIGINS",
-    "https://rag-foundation-pgvector.vercel.app,http://localhost:5173,http://localhost:3000"
+    "https://rag-foundation-pgvector.vercel.app,https://rag-foundation-pgvector.onrender.com,http://localhost:5173,http://localhost:3000"
 )
 allowed_origins = [origin.strip() for origin in allowed_origins_str.split(",")]
 
