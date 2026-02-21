@@ -57,16 +57,13 @@ export default function FileUpload({ onUploadSuccess }) {
         } catch (error) {
             console.log("Upload error:", error);
             
-            let errorText = "Upload failed. Unknown error.";
             if (error.response && error.response.data) {
-                errorText = typeof error.response.data === 'string' 
-                    ? error.response.data 
-                    : JSON.stringify(error.response.data);
+                setMessage({ type: 'error', text: JSON.stringify(error.response.data) });
             } else if (error.message) {
-                errorText = error.message;
+                setMessage({ type: 'error', text: error.message });
+            } else {
+                setMessage({ type: 'error', text: "Upload failed. Unknown error." });
             }
-            
-            setMessage({ type: 'error', text: errorText });
         } finally {
             setIsUploading(false);
             setUploadProgress(0);

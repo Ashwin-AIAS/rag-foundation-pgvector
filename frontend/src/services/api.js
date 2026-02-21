@@ -33,27 +33,7 @@ export async function uploadFile(files, onUploadProgress) {
         });
         return response.data;
     } catch (error) {
-        if (error.response) {
-            // Server responded with a status code out of 2xx range
-            let errorData = error.response.data?.detail || error.response.data?.message || error.response.data;
-            let errorMessage = "Upload failed";
-            
-            if (typeof errorData === 'string') {
-                errorMessage = errorData;
-            } else if (typeof errorData === 'object' && errorData !== null) {
-                errorMessage = JSON.stringify(errorData);
-            } else {
-                errorMessage = `HTTP ${error.response.status}`;
-            }
-            
-            throw new Error(errorMessage);
-        } else if (error.request) {
-            // Request was made but no response received
-            throw new Error('No response from server. Please check your connection.');
-        } else {
-            // Something happened in setting up the request
-            throw new Error(error.message);
-        }
+        throw error;
     }
 }
 
