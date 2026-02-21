@@ -210,7 +210,7 @@ function App() {
           retrieved_chunks: [],
           num_chunks_retrieved: 0,
           timestamp: new Date().toISOString(),
-          isRefusal: displayAnswer.includes("cannot answer") || displayAnswer.startsWith("⚠️")
+          isRefusal: displayAnswer.includes("do not contain enough information") || displayAnswer.startsWith("⚠️")
         };
         setConversationHistory(prev => [newHistoryItem, ...prev].slice(0, 50));
         return;
@@ -248,7 +248,7 @@ function App() {
         retrieved_chunks: result.retrieved_chunks,
         num_chunks_retrieved: result.num_chunks_retrieved,
         timestamp: new Date().toISOString(),
-        isRefusal: result.answer.includes("cannot answer")
+        isRefusal: result.answer.includes("do not contain enough information")
       };
       setConversationHistory(prev => [newHistoryItem, ...prev].slice(0, 50));
 
