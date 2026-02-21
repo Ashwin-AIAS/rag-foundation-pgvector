@@ -8,14 +8,16 @@ if (!API_BASE_URL) {
 }
 
 /**
- * Upload a file to the backend ingestion endpoint
- * @param {File} file - The file to upload
+ * Upload files to the backend ingestion endpoint
+ * @param {FileList|File[]} files - The files to upload
  * @param {Function} onUploadProgress - Callback for upload progress
  * @returns {Promise<Object>} Upload result
  */
-export async function uploadFile(file, onUploadProgress) {
+export async function uploadFile(files, onUploadProgress) {
     const formData = new FormData();
-    formData.append('file', file);
+    for (let i = 0; i < files.length; i++) {
+        formData.append('files', files[i]);
+    }
 
     try {
         const response = await axios.post(`${API_BASE_URL}/ingest`, formData, {

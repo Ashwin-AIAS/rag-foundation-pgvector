@@ -2,6 +2,7 @@ import logging
 import time
 import json
 
+from typing import List
 from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, Query
 from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -193,59 +194,60 @@ async def get_config():
 
 @app.post("/ingest")
 async def ingest_document(
-    file: UploadFile = File(...),
+    files: List[UploadFile] = File(...),
     db: Session = Depends(get_db)
 ):
-    """Upload and ingest a document (PDF, text, CSV, etc.)."""
-    file_extension = Path(file.filename).suffix.lower().lstrip('.')
-    
-    if file_extension not in settings.SUPPORTED_FILE_TYPES:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unsupported file type: .{file_extension}. Supported: {settings.SUPPORTED_FILE_TYPES}"
-        )
-    
-    contents = await file.read()
-    file_size_mb = len(contents) / (1024 * 1024)
-    
-    if file_size_mb > settings.MAX_FILE_SIZE_MB:
-        raise HTTPException(
-            status_code=400,
-            detail=f"File too large: {file_size_mb:.1f}MB. Maximum: {settings.MAX_FILE_SIZE_MB}MB"
-        )
-    
-    try:
-        with tempfile.NamedTemporaryFile(
-            delete=False, 
-            suffix=f".{file_extension}",
-            dir=tempfile.gettempdir()
-        ) as tmp_file:
-            tmp_file.write(contents)
-            temp_path = tmp_file.name
-        
-        ingestion_service = DocumentIngestionService(db)
-        logging.info(f"Uploading file: {file.filename} (v2)")
-        result = await ingestion_service.ingest_document(
-            file_path=temp_path,
-            filename=file.filename
-        )
-        
-        return {
-            "message": f"Document '{file.filename}' ingested successfully",
-            "chunks_created": result["num_chunks"],
-            "filename": file.filename
-        }
-        
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Ingestion failed: {str(e)}"
-        )
-    finally:
-        if 'temp_path' in locals() and os.path.exists(temp_path):
-            os.unlink(temp_path)
+    """Upload and ingest multiple documents (PDF, text, CSV, etc.)."""
+    uploaded = []
+    failed = []
+
+    for file in files:
+        try:
+            file_extension = Path(file.filename).suffix.lower().lstrip('.')
+            
+            if file_extension not in settings.SUPPORTED_FILE_TYPES:
+                failed.append({"file": file.filename, "error": f"Unsupported file type: .{file_extension}. Supported: {settings.SUPPORTED_FILE_TYPES}"})
+                continue
+            
+            contents = await file.read()
+            file_size_mb = len(contents) / (1024 * 1024)
+            
+            if file_size_mb > settings.MAX_FILE_SIZE_MB:
+                failed.append({"file": file.filename, "error": f"File too large: {file_size_mb:.1f}MB. Maximum: {settings.MAX_FILE_SIZE_MB}MB"})
+                continue
+            
+            with tempfile.NamedTemporaryFile(
+                delete=False, 
+                suffix=f".{file_extension}",
+                dir=tempfile.gettempdir()
+            ) as tmp_file:
+                tmp_file.write(contents)
+                temp_path = tmp_file.name
+            
+            ingestion_service = DocumentIngestionService(db)
+            logger.info(f"Uploading file: {file.filename} (multi-upload)")
+            result = await ingestion_service.ingest_document(
+                file_path=temp_path,
+                filename=file.filename
+            )
+            
+            uploaded.append(file.filename)
+            
+        except Exception as e:
+            db.rollback()
+            failed.append({"file": file.filename, "error": str(e)})
+            logger.error(f"Failed to ingest {file.filename}: {e}")
+        finally:
+            if 'temp_path' in locals() and os.path.exists(temp_path):
+                os.unlink(temp_path)
+                del temp_path
+
+    return {
+        "uploaded_count": len(uploaded),
+        "failed_count": len(failed),
+        "uploaded_files": uploaded,
+        "failed_files": failed
+    }
 
 
 # ══════════════════════════════════════════════════════════════

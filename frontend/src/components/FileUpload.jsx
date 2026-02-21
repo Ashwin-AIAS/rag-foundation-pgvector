@@ -19,8 +19,8 @@ export default function FileUpload({ onUploadSuccess }) {
 
     const [uploadProgress, setUploadProgress] = useState(0);
 
-    const processFile = async (file) => {
-        if (!file) return;
+    const processFiles = async (files) => {
+        if (!files || files.length === 0) return;
 
         // Validate file type (expanded for DOCX, Excel, CSV)
         const validTypes = [
@@ -34,10 +34,13 @@ export default function FileUpload({ onUploadSuccess }) {
         ];
         const validExtensions = ['.pdf', '.txt', '.md', '.docx', '.csv', '.xlsx', '.xls'];
 
-        const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
+        const validFiles = Array.from(files).filter(file => {
+            const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
+            return validTypes.includes(file.type) || validExtensions.includes(fileExtension);
+        });
 
-        if (!validTypes.includes(file.type) && !validExtensions.includes(fileExtension)) {
-            setMessage({ type: 'error', text: 'Invalid file format. Supported: PDF, DOCX, TXT, CSV, Excel.' });
+        if (validFiles.length === 0) {
+            setMessage({ type: 'error', text: 'No valid files selected. Supported: PDF, DOCX, TXT, CSV, Excel.' });
             return;
         }
 
@@ -46,10 +49,10 @@ export default function FileUpload({ onUploadSuccess }) {
         setMessage(null);
 
         try {
-            await uploadFile(file, (percent) => {
+            await uploadFile(validFiles, (percent) => {
                 setUploadProgress(percent);
             });
-            setMessage({ type: 'success', text: `Systems upgraded: ${file.name} integrated successfully.` });
+            setMessage({ type: 'success', text: `Systems upgraded: ${validFiles.length} file(s) integrated successfully.` });
             if (onUploadSuccess) onUploadSuccess();
         } catch (error) {
             console.error('Upload failed:', error);
@@ -65,13 +68,13 @@ export default function FileUpload({ onUploadSuccess }) {
         setIsDragging(false);
 
         if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-            processFile(e.dataTransfer.files[0]);
+            processFiles(e.dataTransfer.files);
         }
     }, []);
 
     const handleFileSelect = (e) => {
         if (e.target.files && e.target.files.length > 0) {
-            processFile(e.target.files[0]);
+            processFiles(e.target.files);
         }
     };
 
@@ -102,6 +105,7 @@ export default function FileUpload({ onUploadSuccess }) {
                     onChange={handleFileSelect}
                     accept=".pdf,.txt,.md,.docx,.csv,.xlsx,.xls"
                     disabled={isUploading}
+                    multiple
                 />
 
                 <label
