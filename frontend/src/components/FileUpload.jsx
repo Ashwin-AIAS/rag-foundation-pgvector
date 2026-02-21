@@ -55,8 +55,18 @@ export default function FileUpload({ onUploadSuccess }) {
             setMessage({ type: 'success', text: `Systems upgraded: ${validFiles.length} file(s) integrated successfully.` });
             if (onUploadSuccess) onUploadSuccess();
         } catch (error) {
-            console.error('Upload failed:', error);
-            setMessage({ type: 'error', text: error.message || 'Upload failed. Transmission interrupted.' });
+            console.log("Upload error:", error);
+            
+            let errorText = "Upload failed. Unknown error.";
+            if (error.response && error.response.data) {
+                errorText = typeof error.response.data === 'string' 
+                    ? error.response.data 
+                    : JSON.stringify(error.response.data);
+            } else if (error.message) {
+                errorText = error.message;
+            }
+            
+            setMessage({ type: 'error', text: errorText });
         } finally {
             setIsUploading(false);
             setUploadProgress(0);

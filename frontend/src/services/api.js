@@ -35,7 +35,18 @@ export async function uploadFile(files, onUploadProgress) {
     } catch (error) {
         if (error.response) {
             // Server responded with a status code out of 2xx range
-            throw new Error(error.response.data.detail || `HTTP ${error.response.status}`);
+            let errorData = error.response.data?.detail || error.response.data?.message || error.response.data;
+            let errorMessage = "Upload failed";
+            
+            if (typeof errorData === 'string') {
+                errorMessage = errorData;
+            } else if (typeof errorData === 'object' && errorData !== null) {
+                errorMessage = JSON.stringify(errorData);
+            } else {
+                errorMessage = `HTTP ${error.response.status}`;
+            }
+            
+            throw new Error(errorMessage);
         } else if (error.request) {
             // Request was made but no response received
             throw new Error('No response from server. Please check your connection.');
