@@ -308,6 +308,7 @@ function App() {
 
                 {/* Document Selector */}
                 <DocumentSelector
+                  documents={uploadedFiles}
                   selectedDocs={selectedDocs}
                   onSelectionChange={setSelectedDocs}
                 />

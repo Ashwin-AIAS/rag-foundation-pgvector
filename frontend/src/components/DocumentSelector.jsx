@@ -1,27 +1,8 @@
 import { useState, useEffect } from 'react';
 import { getDocuments } from '../services/api';
 
-export default function DocumentSelector({ selectedDocs, onSelectionChange }) {
-    const [documents, setDocuments] = useState([]);
+export default function DocumentSelector({ documents, selectedDocs, onSelectionChange }) {
     const [isCollapsed, setIsCollapsed] = useState(false);
-    const [isLoading, setIsLoading] = useState(false);
-
-    useEffect(() => {
-        fetchDocs();
-    }, []);
-
-    const fetchDocs = async () => {
-        setIsLoading(true);
-        try {
-            const data = await getDocuments();
-            const filenames = data.documents.map(doc => doc.filename);
-            setDocuments(filenames);
-        } catch (error) {
-            console.error("Failed to fetch documents for selector:", error);
-        } finally {
-            setIsLoading(false);
-        }
-    };
 
     const toggleDoc = (filename) => {
         const next = selectedDocs.includes(filename)
@@ -33,7 +14,7 @@ export default function DocumentSelector({ selectedDocs, onSelectionChange }) {
     const selectAll = () => onSelectionChange([...documents]);
     const clearAll = () => onSelectionChange([]);
 
-    if (documents.length === 0 && !isLoading) return null;
+    if (!documents || documents.length === 0) return null;
 
     return (
         <div className="doc-selector">
@@ -57,9 +38,6 @@ export default function DocumentSelector({ selectedDocs, onSelectionChange }) {
                         <button onClick={clearAll} className="doc-selector-action">Clear</button>
                     </div>
 
-                    {isLoading ? (
-                        <div className="doc-selector-loading">Loading…</div>
-                    ) : (
                         <ul className="doc-selector-list">
                             {documents.map((doc) => (
                                 <li key={doc} className="doc-selector-item">
@@ -75,7 +53,6 @@ export default function DocumentSelector({ selectedDocs, onSelectionChange }) {
                                 </li>
                             ))}
                         </ul>
-                    )}
 
                     {selectedDocs.length === 0 && (
                         <p className="doc-selector-hint">
