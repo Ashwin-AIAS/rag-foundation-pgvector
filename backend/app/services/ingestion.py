@@ -264,25 +264,13 @@ class DocumentIngestionService:
         
         # 4. Generate embeddings in batches
         texts = [chunk.page_content for chunk in chunks]
-        embeddings = []
         
         start_embed = time.perf_counter()
-        # We can pass all texts to embed_documents now as it handles batching, 
-        # but to keep the progress logging we'll loop here.
-        # Actually, let's trust the service and sending all at once might be better if the service was async, 
-        # but here the service is sync.
-        # Let's keep the loop for logging clarity as requested (return embeddings in correct order is guaranteed by service)
         
-        total_chunks = len(texts)
-        batch_size = 20
-        
-        for i in range(0, total_chunks, batch_size):
-            batch_texts = texts[i:i + batch_size]
-            logging.info(f"Embedding batch {i//batch_size + 1}/{(total_chunks + batch_size - 1)//batch_size} for {filename}")
-            
-            # Call embedding service
-            batch_embeddings = self.embeddings.embed_documents(batch_texts)
-            embeddings.extend(batch_embeddings)
+        # Outer batching removed to prevent double batching and reduce API calls.
+        # The embedding service itself handles batching efficiently.
+        logging.info(f"Generating embeddings for {len(texts)} chunks of {filename}...")
+        embeddings = self.embeddings.embed_documents(texts)
             
         embedding_ms = (time.perf_counter() - start_embed) * 1000
 
