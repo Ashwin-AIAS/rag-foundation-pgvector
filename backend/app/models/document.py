@@ -58,3 +58,26 @@ class Feedback(Base):
     
     def __repr__(self):
         return f"<Feedback(id={self.id}, feedback={self.feedback}, chunks={self.num_chunks_retrieved})>"
+
+class PaperSummary(Base):
+    """
+    SQLAlchemy model for structured research paper summaries.
+    
+    Stores the extracted sections of a research paper at ingestion,
+    for use in balanced multi-document comparison.
+    """
+    __tablename__ = "paper_summaries"
+    
+    id = Column(String(36), primary_key=True, index=True)
+    source_file = Column(String(255), nullable=False, index=True, unique=True)
+    problem_statement = Column(Text)
+    methodology = Column(Text)
+    datasets = Column(Text)
+    evaluation_metrics = Column(Text)
+    key_results = Column(Text)
+    limitations = Column(Text)
+    contributions = Column(Text)
+    created_at = Column(TIMESTAMP, server_default=func.now())
+    
+    def __repr__(self):
+        return f"<PaperSummary(id={self.id}, source_file={self.source_file})>"

@@ -39,6 +39,29 @@ class RetrievalService:
         """
         if top_k is None:
             top_k = settings.TOP_K
+            
+        is_subquery = _kwargs.get("_is_balanced_subquery", False)
+        
+        # --- Balanced Retrieval Mode ---
+        if not is_subquery and user_question and source_files and len(source_files) > 1:
+            lower_q = user_question.lower()
+            if any(w in lower_q for w in ["compare", "contrast", "differentiate"]):
+                logger.info("Balanced comparison retrieval activated.")
+                all_chunks = []
+                for sf in source_files:
+                    sf_chunks = self.retrieve(
+                        query_embedding=query_embedding,
+                        top_k=5,
+                        source_files=[sf],
+                        user_question=user_question,
+                        _is_balanced_subquery=True
+                    )
+                    for chunk in sf_chunks:
+                        if not chunk.get("metadata"):
+                            chunk["metadata"] = {}
+                        chunk["metadata"]["balanced_mode"] = True
+                    all_chunks.extend(sf_chunks)
+                return all_chunks[:10]
         
         embedding_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
         

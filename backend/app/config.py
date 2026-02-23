@@ -18,8 +18,8 @@ class Settings:
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
     
     # Document ingestion settings
-    CHUNK_SIZE: int = int(os.getenv("CHUNK_SIZE", "1500"))
-    CHUNK_OVERLAP: int = int(os.getenv("CHUNK_OVERLAP", "150"))
+    CHUNK_SIZE: int = int(os.getenv("CHUNK_SIZE", "700"))
+    CHUNK_OVERLAP: int = int(os.getenv("CHUNK_OVERLAP", "100"))
     MAX_FILE_SIZE_MB: int = int(os.getenv("MAX_FILE_SIZE_MB", "15"))
     SUPPORTED_FILE_TYPES: list = ["pdf", "txt", "docx", "md", "csv", "xlsx", "xls"]
     

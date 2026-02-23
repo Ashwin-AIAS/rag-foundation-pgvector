@@ -35,14 +35,17 @@ class PromptService:
             2. Retrieved context with source citations
             3. User's question
         """
+        # Check if we are in balanced comparison mode
+        is_balanced_mode = any(chunk.get("metadata", {}).get("balanced_mode", False) for chunk in retrieved_chunks)
+        
         # Build the system instructions
         system_prompt = self._build_system_instructions(structured_mode)
         
         # Build the context section from retrieved chunks
-        context_section = self._build_context_section(retrieved_chunks)
+        context_section = self._build_context_section(retrieved_chunks, is_balanced_mode)
         
         # Build the user question section
-        question_section = self._build_question_section(user_question, structured_mode)
+        question_section = self._build_question_section(user_question, structured_mode, is_balanced_mode)
         
         # Combine all sections
         complete_prompt = f"{system_prompt}\n\n{context_section}\n\n{question_section}"
@@ -123,12 +126,13 @@ You must remain factual, precise, and grounded in retrieved documents."""
 
 Your role is to be a faithful representative of the provided documents, not a general knowledge assistant."""
     
-    def _build_context_section(self, chunks: List[Dict[str, Any]]) -> str:
+    def _build_context_section(self, chunks: List[Dict[str, Any]], is_balanced_mode: bool = False) -> str:
         """
         Build the context section from retrieved chunks.
         
         Args:
             chunks: List of retrieved chunks with text and metadata
+            is_balanced_mode: Whether to group chunks by paper for comparison
             
         Returns:
             Formatted context string with source citations
@@ -136,9 +140,49 @@ Your role is to be a faithful representative of the provided documents, not a ge
         if not chunks:
             return "CONTEXT:\nNo relevant documents found."
         
-        context_parts = ["CONTEXT:"]
+        MAX_CONTEXT_LENGTH = 12000 if is_balanced_mode else 6000
         current_length = 0
-        MAX_CONTEXT_LENGTH = 6000
+        
+        if is_balanced_mode:
+            grouped_chunks = {}
+            for chunk in chunks:
+                sf = chunk.get("source_file", "Unknown")
+                if sf not in grouped_chunks:
+                    grouped_chunks[sf] = []
+                grouped_chunks[sf].append(chunk)
+                
+            context_parts = ["CONTEXT FOR COMPARISON:"]
+            paper_labels = ["A", "B", "C", "D", "E"]
+            
+            for idx, (sf, sf_chunks) in enumerate(grouped_chunks.items()):
+                label = paper_labels[idx] if idx < len(paper_labels) else str(idx)
+                context_parts.append(f"\n--- Paper {label} ({sf}) ---")
+                
+                for i, chunk in enumerate(sf_chunks, 1):
+                    chunk_idx = chunk.get("chunk_index", "?")
+                    text = chunk.get("chunk_text", "")
+                    
+                    chunk_header = f"\n[Chunk {chunk_idx}]"
+                    chunk_content = f"{chunk_header}\n{text}"
+                    
+                    if current_length + len(chunk_content) > MAX_CONTEXT_LENGTH:
+                        if current_length == 0:
+                            truncated_text = text[:MAX_CONTEXT_LENGTH - len(chunk_header) - 50] + "...(truncated)"
+                            context_parts.append(f"{chunk_header}\n{truncated_text}")
+                        # We break inner loop but might want to break outer loop too.
+                        # Setting current_length high ensures we stop adding big blocks.
+                        current_length += len(chunk_content)
+                        break
+                        
+                    context_parts.append(chunk_content)
+                    current_length += len(chunk_content)
+                    
+                if current_length > MAX_CONTEXT_LENGTH:
+                    break
+                    
+            return "\n".join(context_parts)
+        
+        context_parts = ["CONTEXT:"]
         
         for i, chunk in enumerate(chunks, 1):
             source = chunk.get("source_file", "Unknown")
@@ -163,17 +207,37 @@ Your role is to be a faithful representative of the provided documents, not a ge
         
         return "\n".join(context_parts)
     
-    def _build_question_section(self, question: str, structured_mode: bool = False) -> str:
+    def _build_question_section(self, question: str, structured_mode: bool = False, is_balanced_mode: bool = False) -> str:
         """
         Build the user question section.
         
         Args:
             question: The user's question
             structured_mode: Whether to enforce JSON output
+            is_balanced_mode: Whether we are comparing multiple papers
             
         Returns:
             Formatted question string
         """
+        if is_balanced_mode:
+            return f"""USER QUESTION:
+{question}
+
+You are comparing multiple research papers based on the provided context.
+Compare the two research papers across:
+
+1. Problem formulation
+2. Methodology
+3. Dataset
+4. Evaluation metrics
+5. Experimental results
+6. Contributions
+7. Limitations
+
+Return a structured comparison table.
+
+ANSWER:"""
+
         if structured_mode:
              return f"""USER QUESTION:
 {question}

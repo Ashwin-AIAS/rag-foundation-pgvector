@@ -76,6 +76,23 @@ def create_query_logs_table():
             """))
             conn.commit()
 
+            # Ensure paper_summaries table exists
+            conn.execute(sa_text("""
+                CREATE TABLE IF NOT EXISTS paper_summaries (
+                    id VARCHAR(36) PRIMARY KEY,
+                    source_file VARCHAR(255) NOT NULL UNIQUE,
+                    problem_statement TEXT,
+                    methodology TEXT,
+                    datasets TEXT,
+                    evaluation_metrics TEXT,
+                    key_results TEXT,
+                    limitations TEXT,
+                    contributions TEXT,
+                    created_at TIMESTAMPTZ DEFAULT NOW()
+                )
+            """))
+            conn.commit()
+
             # Ensure pgvector index exists for performance
             # IVFFlat index is good for speed/recall balance
             conn.execute(sa_text("""
@@ -86,7 +103,7 @@ def create_query_logs_table():
             """))
             conn.commit()
             
-        logger.info("Database initialized (query_logs table + vector index)")
+        logger.info("Database initialized (tables + vector index)")
     except Exception as e:
         logger.error(f"Failed to initialize database: {e}")
 
@@ -322,36 +339,67 @@ async def query_documents(
         query_embedding = embedding_service.embed_query(request.question)
         embed_time = (time.perf_counter() - start_embed) * 1000
         
+        # Structured Summary Comparison Bypass
+        is_summary_comparison = False
+        summary_chunks = []
+        
+        if request.selected_documents and len(request.selected_documents) > 1:
+            lower_q = request.question.lower()
+            if any(w in lower_q for w in ["compare", "contrast", "differentiate"]):
+                from app.models.document import PaperSummary
+                summaries = db.query(PaperSummary).filter(PaperSummary.source_file.in_(request.selected_documents)).all()
+                if len(summaries) == len(request.selected_documents):
+                    is_summary_comparison = True
+                    for i, summary in enumerate(summaries):
+                        chunk_text = f"Problem Statement: {summary.problem_statement}\nMethodology: {summary.methodology}\nDatasets: {summary.datasets}\nEvaluation Metrics: {summary.evaluation_metrics}\nKey Results: {summary.key_results}\nLimitations: {summary.limitations}\nContributions: {summary.contributions}"
+                        summary_chunks.append({
+                            "chunk_text": chunk_text,
+                            "source_file": summary.source_file,
+                            "chunk_index": 0,
+                            "metadata": {"balanced_mode": True, "is_summary": True},
+                            "similarity_score": 1.0,
+                            "keyword_score": 0.0,
+                            "final_score": 1.0
+                        })
+                        
         # Step 2: Retrieve top-K chunks
         start_retrieval = time.perf_counter()
-        retrieval_service = RetrievalService(db)
-        initial_top_k = min(
-            request.top_k if request.top_k is not None else RETRIEVAL_TOP_K,
-            MAX_TOP_K
-        )
         
-        # Log document filter state
-        if request.selected_documents:
-            logger.info(f"Document filter active: {request.selected_documents}")
+        if is_summary_comparison:
+            logger.info("Using structured summaries for comparison instead of chunk retrieval.")
+            retrieved_chunks = summary_chunks
+            reranked_chunks = summary_chunks
+            rerank_succeeded = True
+            retrieval_time = (time.perf_counter() - start_retrieval) * 1000
         else:
-            logger.info("No document filter — searching all documents")
-        
-        retrieved_chunks = retrieval_service.retrieve(
-            query_embedding=query_embedding,
-            top_k=initial_top_k,
-            source_files=request.selected_documents,
-            user_question=request.question,
-        )
-        logger.info(f"Retrieved {len(retrieved_chunks)} chunks")
-        
-        # Step 3: LLM Reranking (part of retrieval flow)
-        reranker = RerankingService()
-        reranked_chunks, rerank_succeeded = reranker.rerank(
-            question=request.question,
-            chunks=retrieved_chunks,
-            top_n=RERANK_RETURN,
-        )
-        retrieval_time = (time.perf_counter() - start_retrieval) * 1000
+            retrieval_service = RetrievalService(db)
+            initial_top_k = min(
+                request.top_k if request.top_k is not None else RETRIEVAL_TOP_K,
+                MAX_TOP_K
+            )
+            
+            # Log document filter state
+            if request.selected_documents:
+                logger.info(f"Document filter active: {request.selected_documents}")
+            else:
+                logger.info("No document filter — searching all documents")
+            
+            retrieved_chunks = retrieval_service.retrieve(
+                query_embedding=query_embedding,
+                top_k=initial_top_k,
+                source_files=request.selected_documents,
+                user_question=request.question,
+            )
+            logger.info(f"Retrieved {len(retrieved_chunks)} chunks")
+            
+            # Step 3: LLM Reranking (part of retrieval flow)
+            reranker = RerankingService()
+            reranked_chunks, rerank_succeeded = reranker.rerank(
+                question=request.question,
+                chunks=retrieved_chunks,
+                top_n=RERANK_RETURN,
+            )
+            retrieval_time = (time.perf_counter() - start_retrieval) * 1000
         
         # Step 4: Handle "No Context" case
         if len(retrieved_chunks) == 0:

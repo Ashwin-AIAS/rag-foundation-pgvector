@@ -16,8 +16,12 @@ from langchain_community.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.schema import Document
 
+import re
+import json
+import uuid
 from app.services.gemini_embedding_service import GeminiEmbeddingService
-from app.models.document import DocumentChunk
+from app.services.generation_service import GenerationService
+from app.models.document import DocumentChunk, PaperSummary
 from app.config import settings
 
 
@@ -199,16 +203,47 @@ class DocumentIngestionService:
     
     def split_documents(self, documents: List[Document]) -> List[Document]:
         """
-        Split documents into smaller chunks.
-        
-        Args:
-            documents: List of LangChain Document objects
-            
-        Returns:
-            List of chunked Document objects
+        Split documents into smaller chunks handling section-aware splitting.
         """
-        chunks = self.text_splitter.split_documents(documents)
-        return chunks
+        final_chunks = []
+        
+        # Regex to detect standard research paper sections
+        section_pattern = re.compile(
+            r'^(?:\d+\.?\d*\s*)?(Abstract|Introduction|Related Work|Method(?:ology)?|Experiments|Results|Conclusion)\b.*$',
+            re.IGNORECASE | re.MULTILINE
+        )
+        
+        for doc in documents:
+            text = doc.page_content
+            matches = list(section_pattern.finditer(text))
+            
+            blocks = []
+            if not matches:
+                blocks.append(("General", text))
+            else:
+                last_idx = 0
+                current_section = "General"
+                for match in matches:
+                    start_idx = match.start()
+                    if start_idx > last_idx:
+                        blocks.append((current_section, text[last_idx:start_idx].strip()))
+                    current_section = match.group(1).title()
+                    if current_section == "Methodology":
+                        current_section = "Method"
+                    last_idx = match.end()
+                
+                if last_idx < len(text):
+                    blocks.append((current_section, text[last_idx:].strip()))
+            
+            # Now split each block
+            for section, block_text in blocks:
+                if not block_text:
+                    continue
+                block_doc = Document(page_content=block_text, metadata={**doc.metadata, "section": section})
+                block_chunks = self.text_splitter.split_documents([block_doc])
+                final_chunks.extend(block_chunks)
+                
+        return final_chunks
     
     def generate_embeddings(self, texts: List[str]) -> List[List[float]]:
         """
@@ -256,8 +291,21 @@ class DocumentIngestionService:
         if not documents:
             return {"filename": filename, "status": "empty", "num_chunks": 0}
 
+        # Summary Extraction
+        full_text = "\n".join(d.page_content for d in documents)
+        paper_id = str(uuid.uuid4())
+        
+        # Only extract summaries for papers (e.g. not CSV/Excel unless they look like papers, 
+        # but to be safe we extract for all or if length > some threshold. We'll extract for all text/pdf.)
+        if file_extension in ["pdf", "txt", "md", "docx"]:
+            self._extract_and_store_summary(full_text, filename, paper_id)
+
         # 3. Split into chunks
         start_chunk = time.perf_counter()
+        
+        for d in documents:
+            d.metadata["paper_id"] = paper_id
+            
         chunks = self.split_documents(documents)
         chunking_ms = (time.perf_counter() - start_chunk) * 1000
         logging.info(f"Split {filename} into {len(chunks)} chunks.")
@@ -300,6 +348,60 @@ class DocumentIngestionService:
             "status": "success",
             "metrics": metrics
         }
+
+    def _extract_and_store_summary(self, text: str, filename: str, paper_id: str):
+        """Extract structured summary using LLM and store in database."""
+        prompt = f"""Extract the following structured information from this research paper:
+
+- Problem statement
+- Core contribution
+- Methodology summary
+- Datasets used
+- Evaluation metrics
+- Key experimental results
+- Limitations
+- Main contributions
+
+Return valid JSON only. Format:
+{{
+  "problem_statement": "...",
+  "contributions": "...",
+  "methodology": "...",
+  "datasets": "...",
+  "evaluation_metrics": "...",
+  "key_results": "...",
+  "limitations": "..."
+}}
+
+Paper text (truncate if needed):
+{text[:40000]}
+"""
+        gen_service = GenerationService()
+        try:
+            logging.info(f"Extracting structured summary for {filename}...")
+            response = gen_service.generate(prompt)
+            match = re.search(r'\{.*\}', response.replace('\n', ' '), re.DOTALL)
+            if match:
+                data = json.loads(match.group(0))
+                summary = PaperSummary(
+                    id=paper_id,
+                    source_file=filename,
+                    problem_statement=data.get("problem_statement"),
+                    methodology=data.get("methodology"),
+                    datasets=data.get("datasets"),
+                    evaluation_metrics=data.get("evaluation_metrics"),
+                    key_results=data.get("key_results"),
+                    limitations=data.get("limitations"),
+                    contributions=data.get("contributions")
+                )
+                self.db.add(summary)
+                self.db.commit()
+                logging.info(f"Successfully stored PaperSummary for {filename}")
+            else:
+                logging.warning(f"Could not parse JSOn for summary of {filename}")
+        except Exception as e:
+            logging.error(f"Failed to extract summary for {filename}: {e}")
+            self.db.rollback()
 
     def store_chunks(
         self, 
