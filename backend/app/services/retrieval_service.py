@@ -46,21 +46,58 @@ class RetrievalService:
         if not is_subquery and user_question and source_files and len(source_files) > 1:
             lower_q = user_question.lower()
             if any(w in lower_q for w in ["compare", "contrast", "differentiate"]):
-                logger.info("Balanced comparison retrieval activated.")
+                logger.info("Balanced comparison retrieval activated with Structural Coverage.")
                 all_chunks = []
                 for sf in source_files:
-                    sf_chunks = self.retrieve(
-                        query_embedding=query_embedding,
-                        top_k=5,
-                        source_files=[sf],
-                        user_question=user_question,
-                        _is_balanced_subquery=True
-                    )
-                    for chunk in sf_chunks:
-                        if not chunk.get("metadata"):
-                            chunk["metadata"] = {}
-                        chunk["metadata"]["balanced_mode"] = True
-                    all_chunks.extend(sf_chunks)
+                    # Determine if section metadata exists by running a quick check
+                    has_sections = False
+                    try:
+                        res = self.db.execute(text("SELECT 1 FROM document_chunks WHERE source_file = :sf AND chunk_metadata->>'section' IS NOT NULL LIMIT 1"), {"sf": sf}).fetchone()
+                        if res:
+                            has_sections = True
+                    except Exception:
+                        self.db.rollback()
+                        
+                    sf_chunks = []
+                    
+                    if has_sections:
+                        logger.info(f"Section metadata found for {sf}. Retrieving structurally.")
+                        # 1 abstract/intro
+                        sf_chunks.extend(self.retrieve(query_embedding, top_k=1, source_files=[sf], user_question=user_question, _is_balanced_subquery=True, _section_filter=["Abstract", "Introduction"]))
+                        # 2 methodology
+                        sf_chunks.extend(self.retrieve(query_embedding, top_k=2, source_files=[sf], user_question=user_question, _is_balanced_subquery=True, _section_filter=["Method", "Methodology"]))
+                        # 2 results/evaluation
+                        sf_chunks.extend(self.retrieve(query_embedding, top_k=2, source_files=[sf], user_question=user_question, _is_balanced_subquery=True, _section_filter=["Results", "Experiments", "Conclusion"]))
+                    else:
+                        logger.info(f"No section metadata for {sf}. Running targeted subqueries.")
+                        # Lazy import to avoid circular dependencies if any
+                        from app.services.embedding_service import EmbeddingService
+                        emb_service = EmbeddingService()
+                        
+                        # Query A: "problem statement"
+                        qa_emb = emb_service.embed_query("problem statement")
+                        sf_chunks.extend(self.retrieve(qa_emb, top_k=2, source_files=[sf], user_question="problem statement", _is_balanced_subquery=True))
+                        
+                        # Query B: "methodology"
+                        qb_emb = emb_service.embed_query("methodology")
+                        sf_chunks.extend(self.retrieve(qb_emb, top_k=2, source_files=[sf], user_question="methodology", _is_balanced_subquery=True))
+                        
+                        # Query C: "experimental results"
+                        qc_emb = emb_service.embed_query("experimental results")
+                        sf_chunks.extend(self.retrieve(qc_emb, top_k=2, source_files=[sf], user_question="experimental results", _is_balanced_subquery=True))
+                    
+                    # Ensure no duplicates and flag metadata
+                    unique_chunks = []
+                    seen_texts = set()
+                    for c in sf_chunks:
+                        if c["chunk_text"] not in seen_texts:
+                            seen_texts.add(c["chunk_text"])
+                            if not c.get("metadata"):
+                                c["metadata"] = {}
+                            c["metadata"]["balanced_mode"] = True
+                            unique_chunks.append(c)
+                            
+                    all_chunks.extend(unique_chunks[:5]) # Enforce max 5 per paper
                 return all_chunks[:10]
         
         embedding_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
@@ -81,6 +118,15 @@ class RetrievalService:
                 file_placeholders.append(f":{key}")
             where_clauses.append(f"source_file IN ({','.join(file_placeholders)})")
             params.update(file_params)
+            
+        section_filter = _kwargs.get("_section_filter")
+        if section_filter:
+            sec_clauses = []
+            for i, sec in enumerate(section_filter):
+                sec_clauses.append(f"chunk_metadata->>'section' ILIKE :sec_{i}")
+                params[f"sec_{i}"] = f"%{sec}%"
+            if sec_clauses:
+                where_clauses.append("(" + " OR ".join(sec_clauses) + ")")
         
         where_sql = " AND ".join(where_clauses) if where_clauses else "TRUE"
         
