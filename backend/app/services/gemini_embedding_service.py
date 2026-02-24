@@ -17,7 +17,7 @@ class GeminiEmbeddingService:
         # Gemini embedding model needs 'models/' prefix
         self.model_name = settings.GEMINI_EMBEDDING_MODEL
     
-    def embed_documents(self, texts: List[str], batch_size: int = 100) -> List[List[float]]:
+    def embed_documents(self, texts: List[str], batch_size: int = 20) -> List[List[float]]:
         """
         Generate embeddings for a list of documents in batches.
         
@@ -30,52 +30,59 @@ class GeminiEmbeddingService:
         """
         embeddings = []
         
+        import time
         # Process in batches
         for i in range(0, len(texts), batch_size):
             batch = texts[i:i + batch_size]
-            try:
-                # Use batch embedding if available, otherwise strict iteration
-                # Newer Google GenAI SDK supports passing a list of content to embed_content
-                # formatted as 'content' checks for list.
-                
-                result = genai.embed_content(
-                    model=self.model_name,
-                    content=batch,
-                    task_type="retrieval_document",
-                    output_dimensionality=768
-                )
-                
-                # result['embedding'] will be a list of lists if input was a list
-                if 'embedding' in result:
-                    batch_embeddings = result['embedding']
-                    # Verify it's a list of lists
-                    if isinstance(batch_embeddings, list) and len(batch_embeddings) > 0:
-                        if isinstance(batch_embeddings[0], list) or isinstance(batch_embeddings[0], float):
-                           # If it returned a single embedding (unexpected for list input), wrap it
-                           if isinstance(batch_embeddings[0], float):
-                                embeddings.append(batch_embeddings)
-                           else:
-                                embeddings.extend(batch_embeddings)
+            
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    # Use batch embedding if available, otherwise strict iteration
+                    # Newer Google GenAI SDK supports passing a list of content to embed_content
+                    # formatted as 'content' checks for list.
+                    
+                    result = genai.embed_content(
+                        model=self.model_name,
+                        content=batch,
+                        task_type="retrieval_document",
+                        output_dimensionality=768
+                    )
+                    
+                    # result['embedding'] will be a list of lists if input was a list
+                    if 'embedding' in result:
+                        batch_embeddings = result['embedding']
+                        # Verify it's a list of lists
+                        if isinstance(batch_embeddings, list) and len(batch_embeddings) > 0:
+                            if isinstance(batch_embeddings[0], list) or isinstance(batch_embeddings[0], float):
+                               # If it returned a single embedding (unexpected for list input), wrap it
+                               if isinstance(batch_embeddings[0], float):
+                                    embeddings.append(batch_embeddings)
+                               else:
+                                    embeddings.extend(batch_embeddings)
+                               # Success, break retry loop!
+                               break
+                        else:
+                            logging.warning(f"DEBUG: Empty embedding list returned for batch {i}")
+                            raise ValueError("No embedding returned from API")
                     else:
-                        logging.warning(f"DEBUG: Empty embedding list returned for batch {i}")
-                else:
-                    logging.warning(f"DEBUG: 'embedding' key missing in result: {result}")
-                    raise ValueError("No embedding returned from API")
-                 
-            except Exception as e:
-                logging.warning(f"Batch embedding failed for batch starting at index {i}, falling back to sequential: {e}")
-                for text in batch:
-                    try:
-                         res = genai.embed_content(
-                            model=self.model_name,
-                            content=text,
-                            task_type="retrieval_document", 
-                            output_dimensionality=768
-                        )
-                         embeddings.append(res['embedding'])
-                    except Exception as inner_e:
-                        logging.error(f"Error embedding chunk: {inner_e}")
-                        raise inner_e
+                        logging.warning(f"DEBUG: 'embedding' key missing in result: {result}")
+                        raise ValueError("No embedding returned from API")
+                     
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "429" in error_str or "quota" in error_str or "rate" in error_str:
+                        if attempt < max_retries - 1:
+                            delay = 5 * (2 ** attempt)
+                            logging.warning(f"Batch embedding rate limited, retrying in {delay}s...")
+                            time.sleep(delay)
+                            continue
+                            
+                    # If not a rate limit, or out of retries, we MUST fail the batch.
+                    # DO NOT fall back to sequential as it immediately drains the 1500 Requests Per Day free tier quota!
+                    if attempt == max_retries - 1:
+                        logging.error(f"Batch embedding completely failed after {max_retries} attempts: {e}")
+                        raise e
         
         if len(embeddings) != len(texts):
             logging.error(f"Generated {len(embeddings)} embeddings for {len(texts)} texts.")

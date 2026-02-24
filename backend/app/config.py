@@ -17,6 +17,11 @@ class Settings:
     # Gemini API settings
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
     
+    # Neo4j settings
+    NEO4J_URI: str = os.getenv("NEO4J_URI", "bolt://127.0.0.1:7687")
+    NEO4J_USER: str = os.getenv("NEO4J_USER", "neo4j")
+    NEO4J_PASSWORD: str = os.getenv("NEO4J_PASSWORD", "password")
+    
     # Document ingestion settings
     CHUNK_SIZE: int = int(os.getenv("CHUNK_SIZE", "700"))
     CHUNK_OVERLAP: int = int(os.getenv("CHUNK_OVERLAP", "100"))

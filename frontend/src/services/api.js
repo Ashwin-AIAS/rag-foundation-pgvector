@@ -42,10 +42,11 @@ export async function uploadFile(files, onUploadProgress) {
  * @param {string} question - The user's question
  * @param {number} topK - Optional: number of chunks to retrieve
  * @param {string[]} selectedDocuments - Optional: filter to these source files
+ * @param {string} retrievalMode - Optional: The retrieval mode to use
  * @returns {Promise<Object>} Query result with answer and chunks
  */
-export async function queryDocuments(question, topK = null, selectedDocuments = []) {
-    const body = { question };
+export async function queryDocuments(question, topK = null, selectedDocuments = [], retrievalMode = 'hybrid') {
+    const body = { question, retrieval_mode: retrievalMode };
     if (topK !== null) {
         body.top_k = topK;
     }
@@ -74,10 +75,13 @@ export async function queryDocuments(question, topK = null, selectedDocuments = 
  * @param {string} question - The user's question
  * @param {function} onUpdate - Callback for full text updates
  * @param {AbortSignal} signal - Optional AbortSignal for cancellation
+ * @param {string[]} selectedDocuments - Optional: filter to these source files
+ * @param {function} onConfidence - Optional: Callback for confidence updates
+ * @param {string} retrievalMode - Optional: The retrieval mode to use
  * @returns {Promise<string>} Full generated text
  */
-export async function streamQuery(question, onUpdate, signal = null, selectedDocuments = [], onConfidence = null) {
-    const body = { question };
+export async function streamQuery(question, onUpdate, signal = null, selectedDocuments = [], onConfidence = null, retrievalMode = 'hybrid') {
+    const body = { question, retrieval_mode: retrievalMode };
     if (selectedDocuments && selectedDocuments.length > 0) {
         body.selected_documents = selectedDocuments;
     }

@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 
 function QuestionInput({ onQueryStart, disabled, isLoading }) {
     const [question, setQuestion] = useState('');
+    const [mode, setMode] = useState('hybrid');
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -10,7 +11,7 @@ function QuestionInput({ onQueryStart, disabled, isLoading }) {
 
         // Delegate query handling entirely to the parent (App.jsx)
         if (onQueryStart) {
-            onQueryStart(question);
+            onQueryStart(question, mode);
         }
         setQuestion('');
     };
@@ -18,6 +19,28 @@ function QuestionInput({ onQueryStart, disabled, isLoading }) {
     return (
         <div className="w-full">
             <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3">
+                <div className="relative flex-none w-full sm:w-40">
+                    <select
+                        value={mode}
+                        onChange={(e) => setMode(e.target.value)}
+                        disabled={disabled || isLoading}
+                        className="w-full bg-cyber-darker border border-cyber-primary/30 rounded-lg px-4 py-3
+                                 text-cyber-text focus:outline-none focus:border-cyber-primary
+                                 focus:shadow-[0_0_15px_rgba(0,212,255,0.2)] transition-all duration-300
+                                 disabled:opacity-50 disabled:cursor-not-allowed appearance-none cursor-pointer"
+                        style={{
+                            backgroundImage: `url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%2300d4ff' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3E%3C/svg%3E")`,
+                            backgroundPosition: 'right 0.5rem center',
+                            backgroundRepeat: 'no-repeat',
+                            backgroundSize: '1.5em 1.5em'
+                        }}
+                    >
+                        <option value="hybrid"> Hybrid Search</option>
+                        <option value="vector"> Vector Only</option>
+                        <option value="graph"> Graph RAG</option>
+                    </select>
+                </div>
+                
                 <div className="relative flex-1">
                     <input
                         type="text"

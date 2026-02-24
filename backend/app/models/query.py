@@ -23,6 +23,10 @@ class QueryRequest(BaseModel):
         None,
         description="Optional list of source filenames to restrict retrieval to"
     )
+    retrieval_mode: str = Field(
+        "hybrid",
+        description="Retrieval strategy to use: 'hybrid', 'vector', or 'graph'"
+    )
 
 
 class RetrievedChunk(BaseModel):

@@ -21,6 +21,7 @@ import json
 import uuid
 from app.services.gemini_embedding_service import GeminiEmbeddingService
 from app.services.generation_service import GenerationService
+from app.services.graph_extraction_service import GraphExtractionService
 from app.models.document import DocumentChunk, PaperSummary
 from app.config import settings
 
@@ -45,6 +46,19 @@ class DocumentIngestionService:
             length_function=len,
             separators=["\n\n", "\n", " ", ""]
         )
+        
+        # Init Neo4j Driver optionally for GraphRAG
+        self.graph_extractor = None
+        try:
+            from neo4j import GraphDatabase
+            driver = GraphDatabase.driver(
+                settings.NEO4J_URI, 
+                auth=(settings.NEO4J_USER, settings.NEO4J_PASSWORD)
+            )
+            self.graph_extractor = GraphExtractionService(driver)
+            logging.info("GraphExtractionService initialized successfully.")
+        except Exception as e:
+            logging.warning(f"Neo4j driver not initialized. Graph RAG disabled during ingestion: {e}")
     
     def _perform_ocr(self, file_path: str) -> str:
         """Perform OCR on a PDF file using Tesseract."""
@@ -403,6 +417,35 @@ Paper text (truncate if needed):
             logging.error(f"Failed to extract summary for {filename}: {e}")
             self.db.rollback()
 
+    def _background_graph_extract(self, chunks: List[Document], source_filename: str):
+        """Run graph extraction in the background to prevent blocking the upload."""
+        if not self.graph_extractor:
+            return
+            
+        logging.info(f"Starting background graph extraction for {source_filename} (Combined first 10 chunks)")
+        
+        combined_text = ""
+        for idx, chunk in enumerate(chunks):
+            if idx >= 10:
+                break
+            # Add chunk text with clear separation for the LLM
+            combined_text += f"\n--- Section {idx+1} ---\n{chunk.page_content}\n"
+                
+        if combined_text:
+            try:
+                # Still add a small delay to space out multiple parallel uploads safely
+                time.sleep(2.0) 
+                
+                self.graph_extractor.extract_and_store(
+                    text=combined_text[:35000],  # cap length just in case
+                    source_file=source_filename, 
+                    chunk_index=0
+                )
+            except Exception as graph_err:
+                logging.error(f"Background graph extraction failed for {source_filename}: {graph_err}")
+                
+        logging.info(f"Background graph extraction completed for {source_filename}")
+
     def store_chunks(
         self, 
         chunks: List[Document], 
@@ -430,10 +473,19 @@ Paper text (truncate if needed):
                     chunk_metadata=metadata
                 )
                 db_chunks.append(db_chunk)
-            
-            # Bulk save            # Use add_all instead of bulk_save_objects to correctly handle Computed columns
+                
+            # Bulk save
             self.db.add_all(db_chunks)
             self.db.commit()
+            
+            # Start background graph extraction AFTER database commit
+            if self.graph_extractor:
+                import threading
+                threading.Thread(
+                    target=self._background_graph_extract,
+                    args=(chunks, source_filename),
+                    daemon=True
+                ).start()
             
             return len(db_chunks)
         except Exception as e:

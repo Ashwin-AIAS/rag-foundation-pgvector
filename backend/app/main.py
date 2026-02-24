@@ -21,6 +21,7 @@ from app.services.prompt_service import PromptService
 from app.services.generation_service import GenerationService
 from app.services.document_service import DocumentService
 from app.services.reranking_service import RerankingService
+from app.services.graph_retrieval_service import GraphRetrievalService
 from app.models.query import QueryRequest, QueryResponse, RetrievedChunk
 from app.models.feedback import FeedbackRequest, FeedbackResponse
 from app.models.document import Feedback, DocumentChunk
@@ -364,6 +365,7 @@ async def query_documents(
                         
         # Step 2: Retrieve top-K chunks
         start_retrieval = time.perf_counter()
+        retrieved_chunks = []
         
         if is_summary_comparison:
             logger.info("Using structured summaries for comparison instead of chunk retrieval.")
@@ -372,7 +374,6 @@ async def query_documents(
             rerank_succeeded = True
             retrieval_time = (time.perf_counter() - start_retrieval) * 1000
         else:
-            retrieval_service = RetrievalService(db)
             initial_top_k = min(
                 request.top_k if request.top_k is not None else RETRIEVAL_TOP_K,
                 MAX_TOP_K
@@ -384,13 +385,40 @@ async def query_documents(
             else:
                 logger.info("No document filter — searching all documents")
             
-            retrieved_chunks = retrieval_service.retrieve(
-                query_embedding=query_embedding,
-                top_k=initial_top_k,
-                source_files=request.selected_documents,
-                user_question=request.question,
-            )
-            logger.info(f"Retrieved {len(retrieved_chunks)} chunks")
+            # Route Retrieval based on requested mode ("hybrid" default, "vector", "graph")
+            mode = getattr(request, 'retrieval_mode', 'hybrid')
+            
+            # 1. Standard Vector/Keyword Hybrid
+            if mode in ["hybrid", "vector"]:
+                retrieval_service = RetrievalService(db)
+                vector_chunks = retrieval_service.retrieve(
+                    query_embedding=query_embedding,
+                    top_k=initial_top_k,
+                    source_files=request.selected_documents,
+                    user_question=request.question,
+                )
+                retrieved_chunks.extend(vector_chunks)
+            
+            # 2. Graph Retrieval
+            if mode in ["hybrid", "graph"]:
+                try:
+                    from neo4j import GraphDatabase
+                    driver = GraphDatabase.driver(
+                        settings.NEO4J_URI, 
+                        auth=(settings.NEO4J_USER, settings.NEO4J_PASSWORD)
+                    )
+                    graph_service = GraphRetrievalService(driver)
+                    graph_chunks = graph_service.retrieve(
+                        user_question=request.question,
+                        source_files=request.selected_documents,
+                        top_k=5  # Keep graph context focused
+                    )
+                    retrieved_chunks.extend(graph_chunks)
+                    driver.close()
+                except Exception as e:
+                    logger.warning(f"Graph retrieval failed or not configured: {e}")
+
+            logger.info(f"Retrieved {len(retrieved_chunks)} total chunks (Mode: {mode})")
             
             # Step 3: LLM Reranking (part of retrieval flow)
             reranker = RerankingService()
