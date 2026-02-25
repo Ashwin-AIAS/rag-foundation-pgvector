@@ -1,11 +1,13 @@
 import { useState, useCallback } from 'react';
-import { uploadFile } from '../services/api';
+import { uploadFile, pollIngestStatus } from '../services/api';
 import { motion } from 'framer-motion';
 
 export default function FileUpload({ onUploadSuccess }) {
     const [isDragging, setIsDragging] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
-    const [message, setMessage] = useState(null); // { type: 'success' | 'error', text: string }
+    const [message, setMessage] = useState(null);
+    const [uploadProgress, setUploadProgress] = useState(0);
+    const [jobStatuses, setJobStatuses] = useState([]);
 
     const handleDragOver = useCallback((e) => {
         e.preventDefault();
@@ -17,12 +19,9 @@ export default function FileUpload({ onUploadSuccess }) {
         setIsDragging(false);
     }, []);
 
-    const [uploadProgress, setUploadProgress] = useState(0);
-
     const processFiles = async (files) => {
         if (!files || files.length === 0) return;
 
-        // Validate file type (expanded for DOCX, Excel, CSV)
         const validTypes = [
             'application/pdf',
             'text/plain',
@@ -35,8 +34,8 @@ export default function FileUpload({ onUploadSuccess }) {
         const validExtensions = ['.pdf', '.txt', '.md', '.docx', '.csv', '.xlsx', '.xls'];
 
         const validFiles = Array.from(files).filter(file => {
-            const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
-            return validTypes.includes(file.type) || validExtensions.includes(fileExtension);
+            const ext = '.' + file.name.split('.').pop().toLowerCase();
+            return validTypes.includes(file.type) || validExtensions.includes(ext);
         });
 
         if (validFiles.length === 0) {
@@ -47,16 +46,59 @@ export default function FileUpload({ onUploadSuccess }) {
         setIsUploading(true);
         setUploadProgress(0);
         setMessage(null);
+        setJobStatuses([]);
 
         try {
-            await uploadFile(validFiles, (percent) => {
+            // Phase 1: POST bytes — backend returns 202 immediately with job IDs
+            const result = await uploadFile(validFiles, (percent) => {
                 setUploadProgress(percent);
             });
-            setMessage({ type: 'success', text: `Systems upgraded: ${validFiles.length} file(s) integrated successfully.` });
-            if (onUploadSuccess) onUploadSuccess();
+
+            const jobs = result.jobs || [];
+            const rejected = result.rejected || [];
+
+            // Show queued state per job — UI unfreezes here
+            setJobStatuses(jobs.map(j => ({ job_id: j.job_id, filename: j.filename, status: 'QUEUED' })));
+            setIsUploading(false);
+            setUploadProgress(0);
+
+            if (rejected.length > 0) {
+                setMessage({ type: 'error', text: `Rejected: ${rejected.map(r => r.file).join(', ')}` });
+            }
+
+            if (jobs.length === 0) return;
+
+            // Phase 2: Poll each job until COMPLETE or FAILED
+            const results = await Promise.all(
+                jobs.map(j =>
+                    pollIngestStatus(j.job_id, (status) => {
+                        setJobStatuses(prev =>
+                            prev.map(s => s.job_id === j.job_id ? { ...s, status } : s)
+                        );
+                    })
+                )
+            );
+
+            const failed = results.filter(r => r.status === 'FAILED');
+            const completed = results.filter(r => r.status === 'COMPLETE');
+
+            if (failed.length === 0) {
+                setMessage({ type: 'success', text: `${completed.length} file(s) ingested successfully.` });
+            } else {
+                setMessage({
+                    type: 'error',
+                    text: `${completed.length} complete, ${failed.length} failed: ${failed.map(f => f.filename).join(', ')}`
+                });
+            }
+
+            if (completed.length > 0 && onUploadSuccess) onUploadSuccess();
+            setJobStatuses([]);
+
         } catch (error) {
             console.log("Upload error:", error);
-            
+            setIsUploading(false);
+            setUploadProgress(0);
+            setJobStatuses([]);
             if (error.response && error.response.data) {
                 setMessage({ type: 'error', text: JSON.stringify(error.response.data) });
             } else if (error.message) {
@@ -64,16 +106,12 @@ export default function FileUpload({ onUploadSuccess }) {
             } else {
                 setMessage({ type: 'error', text: "Upload failed. Unknown error." });
             }
-        } finally {
-            setIsUploading(false);
-            setUploadProgress(0);
         }
     };
 
     const handleDrop = useCallback((e) => {
         e.preventDefault();
         setIsDragging(false);
-
         if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
             processFiles(e.dataTransfer.files);
         }
@@ -83,6 +121,19 @@ export default function FileUpload({ onUploadSuccess }) {
         if (e.target.files && e.target.files.length > 0) {
             processFiles(e.target.files);
         }
+    };
+
+    const statusIcon = (status) => {
+        if (status === 'COMPLETE') return '✓';
+        if (status === 'FAILED') return '✗';
+        if (status === 'PROCESSING') return '⟳';
+        return '…';
+    };
+
+    const statusColor = (status) => {
+        if (status === 'COMPLETE') return 'text-green-400';
+        if (status === 'FAILED') return 'text-red-400';
+        return 'text-cyber-primary';
     };
 
     return (
@@ -155,6 +206,21 @@ export default function FileUpload({ onUploadSuccess }) {
                             transition={{ duration: 0.1 }}
                         />
                     </div>
+                </div>
+            )}
+
+            {/* Per-job status list */}
+            {jobStatuses.length > 0 && (
+                <div className="mt-3 space-y-1">
+                    {jobStatuses.map(j => (
+                        <div key={j.job_id} className={`flex items-center gap-2 text-xs px-2 py-1 rounded ${statusColor(j.status)}`}>
+                            <span className={j.status === 'PROCESSING' ? 'animate-spin inline-block' : ''}>
+                                {statusIcon(j.status)}
+                            </span>
+                            <span className="truncate flex-1">{j.filename}</span>
+                            <span className="uppercase tracking-wider opacity-70">{j.status}</span>
+                        </div>
+                    ))}
                 </div>
             )}
 

@@ -1,9 +1,11 @@
 import logging
 import time
 import json
+import uuid
+import threading
 
-from typing import List
-from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, Query
+from typing import List, Dict
+from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, Query, BackgroundTasks
 from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
@@ -33,6 +35,11 @@ MAX_TOP_K = 20           # Hard cap for top_k parameter
 RETRIEVAL_TOP_K = 15     # Broader initial retrieval for reranking
 RERANK_RETURN = 5        # Reranker returns this many chunks
 SLOW_QUERY_THRESHOLD = 3.0  # Seconds
+SLOW_RETRIEVAL_THRESHOLD_MS = 500  # ms — warn if retrieval exceeds this
+
+# ── In-process ingestion job tracker (thread-safe via GIL + dict assignment) ───
+# Format: {job_id: {"filename": str, "status": str, "error": str|None, "num_chunks": int|None}}
+ingestion_jobs: Dict[str, Dict] = {}
 
 # Create FastAPI application
 app = FastAPI(
@@ -77,6 +84,19 @@ def create_query_logs_table():
             """))
             conn.commit()
 
+            # Ingestion error log — permanent record for every pipeline failure
+            conn.execute(sa_text("""
+                CREATE TABLE IF NOT EXISTS ingestion_errors (
+                    id SERIAL PRIMARY KEY,
+                    filename TEXT NOT NULL,
+                    stage TEXT NOT NULL,
+                    error_message TEXT,
+                    stack_trace TEXT,
+                    created_at TIMESTAMPTZ DEFAULT NOW()
+                )
+            """))
+            conn.commit()
+
             # Ensure paper_summaries table exists
             conn.execute(sa_text("""
                 CREATE TABLE IF NOT EXISTS paper_summaries (
@@ -94,8 +114,7 @@ def create_query_logs_table():
             """))
             conn.commit()
 
-            # Ensure pgvector index exists for performance
-            # IVFFlat index is good for speed/recall balance
+            # Ensure pgvector IVFFlat index exists for performance
             conn.execute(sa_text("""
                 CREATE INDEX IF NOT EXISTS document_chunks_embedding_idx
                 ON document_chunks
@@ -103,8 +122,26 @@ def create_query_logs_table():
                 WITH (lists = 100);
             """))
             conn.commit()
-            
-        logger.info("Database initialized (tables + vector index)")
+
+            # Run ANALYZE to update planner statistics after index creation
+            conn.execute(sa_text("ANALYZE document_chunks;"))
+            conn.commit()
+
+            # GIN index on search_vector (generated column) for full-text speed
+            # Wrapped in try/except — column may not exist in all deployments
+            try:
+                conn.execute(sa_text("""
+                    CREATE INDEX IF NOT EXISTS idx_document_chunks_search_vector
+                    ON document_chunks
+                    USING gin(search_vector);
+                """))
+                conn.commit()
+                logger.info("GIN index on search_vector ensured.")
+            except Exception as gin_err:
+                conn.rollback()
+                logger.warning(f"GIN index on search_vector skipped (column may not exist): {gin_err}")
+
+        logger.info("Database initialized (tables + vector index + ANALYZE)")
     except Exception as e:
         logger.error(f"Failed to initialize database: {e}")
 
@@ -210,62 +247,161 @@ async def get_config():
 # Document Ingestion
 # ══════════════════════════════════════════════════════════════
 
-@app.post("/ingest")
+def _background_ingest_worker(job_id: str, temp_path: str, filename: str):
+    """
+    Background worker: runs ingestion in its own DB session.
+    Updates ingestion_jobs[job_id] with progress and final status.
+    """
+    from app.database import SessionLocal
+    db = SessionLocal()
+    try:
+        ingestion_jobs[job_id]["status"] = "PROCESSING"
+        logger.info(f"[JOB {job_id}] PROCESSING started for {filename}")
+
+        ingestion_service = DocumentIngestionService(db)
+        result = ingestion_service.ingest_document_sync(temp_path, filename)
+
+        ingestion_jobs[job_id].update({
+            "status": "COMPLETE",
+            "num_chunks": result.get("num_chunks"),
+            "metrics": result.get("metrics"),
+        })
+        logger.info(f"[JOB {job_id}] COMPLETE — {result.get('num_chunks')} chunks for {filename}")
+    except Exception as e:
+        ingestion_jobs[job_id].update({"status": "FAILED", "error": str(e)})
+        logger.error(f"[JOB {job_id}] FAILED for {filename}: {e}")
+        db.rollback()
+    finally:
+        db.close()
+        if os.path.exists(temp_path):
+            try:
+                os.unlink(temp_path)
+            except Exception:
+                pass
+
+
+@app.post("/ingest", status_code=202)
 async def ingest_document(
     files: List[UploadFile] = File(...),
-    db: Session = Depends(get_db)
+    background_tasks: BackgroundTasks = BackgroundTasks()
 ):
-    """Upload and ingest multiple documents (PDF, text, CSV, etc.)."""
-    uploaded = []
-    failed = []
+    """
+    Upload and ingest multiple documents asynchronously.
+
+    Returns HTTP 202 immediately after files are saved to disk.
+    Use GET /ingest/status/{job_id} to poll per-file progress.
+    """
+    jobs = []
+    rejected = []
 
     for file in files:
-        try:
-            file_extension = Path(file.filename).suffix.lower().lstrip('.')
-            
-            if file_extension not in settings.SUPPORTED_FILE_TYPES:
-                failed.append({"file": file.filename, "error": f"Unsupported file type: .{file_extension}. Supported: {settings.SUPPORTED_FILE_TYPES}"})
-                continue
-            
-            contents = await file.read()
-            file_size_mb = len(contents) / (1024 * 1024)
-            
-            if file_size_mb > settings.MAX_FILE_SIZE_MB:
-                failed.append({"file": file.filename, "error": f"File too large: {file_size_mb:.1f}MB. Maximum: {settings.MAX_FILE_SIZE_MB}MB"})
-                continue
-            
-            with tempfile.NamedTemporaryFile(
-                delete=False, 
-                suffix=f".{file_extension}",
-                dir=tempfile.gettempdir()
-            ) as tmp_file:
-                tmp_file.write(contents)
-                temp_path = tmp_file.name
-            
-            ingestion_service = DocumentIngestionService(db)
-            logger.info(f"Uploading file: {file.filename} (multi-upload)")
-            result = await ingestion_service.ingest_document(
-                file_path=temp_path,
-                filename=file.filename
-            )
-            
-            uploaded.append(file.filename)
-            
-        except Exception as e:
-            db.rollback()
-            failed.append({"file": file.filename, "error": str(e)})
-            logger.error(f"Failed to ingest {file.filename}: {e}")
-        finally:
-            if 'temp_path' in locals() and os.path.exists(temp_path):
-                os.unlink(temp_path)
-                del temp_path
+        file_extension = Path(file.filename).suffix.lower().lstrip('.')
 
-    return {
-        "uploaded_count": len(uploaded),
-        "failed_count": len(failed),
-        "uploaded_files": uploaded,
-        "failed_files": failed
-    }
+        if file_extension not in settings.SUPPORTED_FILE_TYPES:
+            rejected.append({
+                "file": file.filename,
+                "error": f"Unsupported file type: .{file_extension}. Supported: {settings.SUPPORTED_FILE_TYPES}"
+            })
+            continue
+
+        contents = await file.read()
+        file_size_mb = len(contents) / (1024 * 1024)
+
+        if file_size_mb > settings.MAX_FILE_SIZE_MB:
+            rejected.append({
+                "file": file.filename,
+                "error": f"File too large: {file_size_mb:.1f}MB. Maximum: {settings.MAX_FILE_SIZE_MB}MB"
+            })
+            continue
+
+        # Save to temp — do this synchronously (fast)
+        with tempfile.NamedTemporaryFile(
+            delete=False,
+            suffix=f".{file_extension}",
+            dir=tempfile.gettempdir()
+        ) as tmp_file:
+            tmp_file.write(contents)
+            temp_path = tmp_file.name
+
+        job_id = str(uuid.uuid4())
+        ingestion_jobs[job_id] = {
+            "job_id": job_id,
+            "filename": file.filename,
+            "status": "UPLOADING",
+            "num_chunks": None,
+            "error": None,
+            "metrics": None,
+        }
+        logger.info(f"[JOB {job_id}] UPLOADING — {file.filename} saved to {temp_path}")
+
+        # Schedule background ingestion (uses its own DB session)
+        background_tasks.add_task(_background_ingest_worker, job_id, temp_path, file.filename)
+        jobs.append({"job_id": job_id, "filename": file.filename})
+
+    return JSONResponse(
+        status_code=202,
+        content={
+            "message": "Files accepted — ingestion running in background",
+            "jobs": jobs,
+            "rejected": rejected,
+        }
+    )
+
+
+@app.get("/ingest/status/{job_id}")
+async def ingest_status(job_id: str):
+    """Poll the status of an async ingestion job."""
+    job = ingestion_jobs.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found.")
+    return job
+
+
+@app.get("/ingest/errors")
+async def get_ingestion_errors(
+    filename: str = Query(None, description="Filter by filename"),
+    limit: int = Query(50, ge=1, le=200),
+    db: Session = Depends(get_db)
+):
+    """
+    Return recent ingestion errors from the ingestion_errors table.
+    Useful for diagnosing why files failed — shows stage, error message, and stack trace.
+    """
+    try:
+        params = {"limit": limit}
+        where = ""
+        if filename:
+            where = "WHERE filename = :fn"
+            params["fn"] = filename
+        rows = db.execute(sa_text(f"""
+            SELECT filename, stage, error_message, stack_trace, created_at
+            FROM ingestion_errors
+            {where}
+            ORDER BY created_at DESC
+            LIMIT :limit
+        """), params).fetchall()
+
+        # Group by filename
+        by_file: dict = {}
+        for row in rows:
+            fn = row.filename
+            if fn not in by_file:
+                by_file[fn] = []
+            by_file[fn].append({
+                "stage": row.stage,
+                "error": row.error_message,
+                "stack_trace": row.stack_trace,
+                "timestamp": row.created_at.isoformat() if row.created_at else None
+            })
+
+        return {
+            "total_errors": len(rows),
+            "errors_by_file": by_file
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch errors: {str(e)}")
+
+
 
 
 # ══════════════════════════════════════════════════════════════
@@ -387,9 +523,12 @@ async def query_documents(
             
             # Route Retrieval based on requested mode ("hybrid" default, "vector", "graph")
             mode = getattr(request, 'retrieval_mode', 'hybrid')
-            
+            vector_retrieval_ms = 0.0
+            graph_retrieval_ms = 0.0
+
             # 1. Standard Vector/Keyword Hybrid
             if mode in ["hybrid", "vector"]:
+                _t_vec = time.perf_counter()
                 retrieval_service = RetrievalService(db)
                 vector_chunks = retrieval_service.retrieve(
                     query_embedding=query_embedding,
@@ -397,14 +536,16 @@ async def query_documents(
                     source_files=request.selected_documents,
                     user_question=request.question,
                 )
+                vector_retrieval_ms = (time.perf_counter() - _t_vec) * 1000
                 retrieved_chunks.extend(vector_chunks)
-            
+
             # 2. Graph Retrieval
             if mode in ["hybrid", "graph"]:
+                _t_graph = time.perf_counter()
                 try:
                     from neo4j import GraphDatabase
                     driver = GraphDatabase.driver(
-                        settings.NEO4J_URI, 
+                        settings.NEO4J_URI,
                         auth=(settings.NEO4J_USER, settings.NEO4J_PASSWORD)
                     )
                     graph_service = GraphRetrievalService(driver)
@@ -417,7 +558,14 @@ async def query_documents(
                     driver.close()
                 except Exception as e:
                     logger.warning(f"Graph retrieval failed or not configured: {e}")
+                graph_retrieval_ms = (time.perf_counter() - _t_graph) * 1000
 
+            total_retrieval_so_far = (time.perf_counter() - start_retrieval) * 1000
+            logger.info(
+                f"[LATENCY] mode={mode} vector_ms={vector_retrieval_ms:.1f} "
+                f"graph_ms={graph_retrieval_ms:.1f} "
+                f"total_retrieval_ms={total_retrieval_so_far:.1f}"
+            )
             logger.info(f"Retrieved {len(retrieved_chunks)} total chunks (Mode: {mode})")
             
             # Step 3: LLM Reranking (part of retrieval flow)
@@ -428,7 +576,12 @@ async def query_documents(
                 top_n=RERANK_RETURN,
             )
             retrieval_time = (time.perf_counter() - start_retrieval) * 1000
-        
+            if retrieval_time > SLOW_RETRIEVAL_THRESHOLD_MS:
+                logger.warning(
+                    f"WARNING: Slow retrieval detected ({retrieval_time:.0f}ms) "
+                    f"[mode={mode}, chunks={len(retrieved_chunks)}]"
+                )
+
         # Step 4: Handle "No Context" case
         if len(retrieved_chunks) == 0:
             total_time = (time.perf_counter() - start_total) * 1000

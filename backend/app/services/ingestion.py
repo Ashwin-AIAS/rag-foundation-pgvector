@@ -1,9 +1,12 @@
 import os
 import logging
 import time
-from typing import List, Dict, Any
+import traceback
+import threading
+from typing import List, Dict, Any, Optional
 from pathlib import Path
 from sqlalchemy.orm import Session
+from sqlalchemy import text as sa_text
 
 import docx  # python-docx
 import pandas as pd
@@ -25,18 +28,47 @@ from app.services.graph_extraction_service import GraphExtractionService
 from app.models.document import DocumentChunk, PaperSummary
 from app.config import settings
 
+logger = logging.getLogger(__name__)
+
+# ── Phase 5: Global semaphore — max 3 concurrent embedding calls ────────────
+_embedding_semaphore = threading.Semaphore(3)
+
+MIN_TEXT_LENGTH = 1000  # Phase 3: minimum characters after PDF parse
+
+
+def _log_ingestion_error(db: Session, filename: str, stage: str, exc: Exception):
+    """Persist a structured ingestion error to the ingestion_errors table."""
+    tb = traceback.format_exc()
+    try:
+        db.execute(
+            sa_text("""
+                INSERT INTO ingestion_errors (filename, stage, error_message, stack_trace)
+                VALUES (:fn, :st, :em, :tb)
+            """),
+            {"fn": filename, "st": stage, "em": str(exc), "tb": tb}
+        )
+        db.commit()
+    except Exception as log_err:
+        # Never let error logging crash the caller
+        logger.error(f"[ERROR_LOG FAIL] Could not persist error for {filename}: {log_err}")
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
 
 class DocumentIngestionService:
     """
     Service for ingesting documents into the RAG system.
-    
-    Handles the complete pipeline:
+
+    Pipeline:
     1. Load documents (PDF, DOCX, TXT, MD, CSV)
-    2. Split into chunks
-    3. Generate embeddings
-    4. Store in database
+    2. Validate parsed text length
+    3. Split into chunks
+    4. Generate embeddings (semaphore-limited, retry-capable)
+    5. Store chunks individually (per-chunk safety)
     """
-    
+
     def __init__(self, db: Session):
         self.db = db
         self.embeddings = GeminiEmbeddingService()
@@ -46,24 +78,24 @@ class DocumentIngestionService:
             length_function=len,
             separators=["\n\n", "\n", " ", ""]
         )
-        
+
         # Init Neo4j Driver optionally for GraphRAG
         self.graph_extractor = None
         try:
             from neo4j import GraphDatabase
             driver = GraphDatabase.driver(
-                settings.NEO4J_URI, 
+                settings.NEO4J_URI,
                 auth=(settings.NEO4J_USER, settings.NEO4J_PASSWORD)
             )
             self.graph_extractor = GraphExtractionService(driver)
-            logging.info("GraphExtractionService initialized successfully.")
+            logger.info("GraphExtractionService initialized successfully.")
         except Exception as e:
-            logging.warning(f"Neo4j driver not initialized. Graph RAG disabled during ingestion: {e}")
-    
+            logger.warning(f"Neo4j driver not initialized. Graph RAG disabled during ingestion: {e}")
+
     def _perform_ocr(self, file_path: str) -> str:
         """Perform OCR on a PDF file using Tesseract."""
         try:
-            logging.info(f"Starting OCR for {file_path}")
+            logger.info(f"Starting OCR for {file_path}")
             images = convert_from_path(file_path)
             full_text = ""
             for i, image in enumerate(images):
@@ -71,166 +103,111 @@ class DocumentIngestionService:
                 full_text += text + "\n"
             return full_text
         except Exception as e:
-            logging.error(f"OCR failed: {e}")
+            logger.error(f"OCR failed: {e}")
             raise ValueError(f"OCR processing failed: {str(e)}")
 
     def load_document(self, file_path: str, file_type: str) -> List[Document]:
-        """
-        Load a document using appropriate loader.
-        
-        Args:
-            file_path: Path to the document file
-            file_type: File extension (e.g., 'pdf', 'txt', 'docx')
-            
-        Returns:
-            List of LangChain Document objects
-        """
+        """Load a document using appropriate loader."""
         if file_type == "pdf":
             loader = PyPDFLoader(file_path)
             docs = loader.load()
-            
-            # Check for empty or very short text indicating scanned PDF
             total_text_len = sum(len(d.page_content) for d in docs)
             if total_text_len < 200:
-                logging.info(f"PDF text length {total_text_len} is too short. Triggering OCR fallback.")
+                logger.info(f"PDF text length {total_text_len} is too short. Triggering OCR fallback.")
                 ocr_text = self._perform_ocr(file_path)
                 return [Document(page_content=ocr_text, metadata={"source": file_path, "file_type": "pdf", "ingestion_method": "ocr"})]
-            
             return docs
-            
+
         elif file_type in ["txt", "md"]:
             try:
                 with open(file_path, "r", encoding="utf-8") as f:
                     text = f.read()
-                return [Document(page_content=text, metadata={"source": file_path, "file_type": file_type})]
             except UnicodeDecodeError:
-                # Fallback to distinct encoding if utf-8 fails
                 with open(file_path, "r", encoding="latin-1") as f:
                     text = f.read()
-                return [Document(page_content=text, metadata={"source": file_path, "file_type": file_type})]
-                
+            return [Document(page_content=text, metadata={"source": file_path, "file_type": file_type})]
+
         elif file_type == "docx":
             try:
                 doc = docx.Document(file_path)
-                full_text = []
-                for paragraph in doc.paragraphs:
-                    full_text.append(paragraph.text)
-                text = "\n".join(full_text)
+                text = "\n".join(p.text for p in doc.paragraphs)
                 return [Document(page_content=text, metadata={"source": file_path, "file_type": "docx"})]
             except Exception as e:
-                logging.error(f"Error loading DOCX file: {e}")
+                logger.error(f"Error loading DOCX file: {e}")
                 raise ValueError(f"Failed to load DOCX file: {str(e)}")
 
         elif file_type == "csv":
             try:
-                # Try different encodings for CSV files (Excel often uses cp1252/latin1)
                 encodings_to_try = ['utf-8', 'latin1', 'cp1252', 'iso-8859-1']
                 df = None
-                
                 for encoding in encodings_to_try:
                     try:
                         df = pd.read_csv(file_path, encoding=encoding)
                         break
                     except UnicodeDecodeError:
                         continue
-                        
                 if df is None:
-                    raise ValueError("Failed to decode CSV with supported encodings (utf-8, latin1, cp1252)")
+                    raise ValueError("Failed to decode CSV with supported encodings")
                 documents = []
-                # Process in chunks of rows to avoid huge single documents
                 row_chunk_size = 20
-                
                 for i in range(0, len(df), row_chunk_size):
                     chunk_df = df.iloc[i:i+row_chunk_size]
                     text_block = ""
                     chunk_rows = []
-                    
                     for _, row in chunk_df.iterrows():
-                        # Create readable text for embedding
                         row_dict = row.to_dict()
-                        # Handle NaN values
                         clean_row = {k: v for k, v in row_dict.items() if pd.notna(v)}
                         chunk_rows.append(clean_row)
-                        
                         row_text = "\n".join([f"{col}: {val}" for col, val in clean_row.items()])
                         text_block += row_text + "\n\n---\n\n"
-                    
                     documents.append(Document(
-                        page_content=text_block, 
-                        metadata={
-                            "source": file_path, 
-                            "file_type": "csv", 
-                            "row_start": i,
-                            "row_data": chunk_rows  # Store raw data for table reconstruction
-                        }
+                        page_content=text_block,
+                        metadata={"source": file_path, "file_type": "csv", "row_start": i, "row_data": chunk_rows}
                     ))
                 return documents
             except Exception as e:
-                logging.error(f"Error loading CSV file: {e}")
+                logger.error(f"Error loading CSV file: {e}")
                 raise ValueError(f"Failed to load CSV file: {str(e)}")
 
         elif file_type in ["xlsx", "xls"]:
             try:
-                # Use openpyxl for xlsx (default) or xlrd for xls (if installed/needed)
-                # Pandas read_excel handles this automatically if deps are present
                 df = pd.read_excel(file_path)
-                
-                # Convert date columns to string to avoid serialization issues
                 for col in df.select_dtypes(include=['datetime64']).columns:
                     df[col] = df[col].astype(str)
-                    
                 documents = []
-                # Process in chunks of rows to avoid huge single documents
                 row_chunk_size = 20
-                
                 for i in range(0, len(df), row_chunk_size):
                     chunk_df = df.iloc[i:i+row_chunk_size]
                     text_block = ""
                     chunk_rows = []
-                    
                     for _, row in chunk_df.iterrows():
-                        # Create readable text for embedding
                         row_dict = row.to_dict()
-                        # Handle NaN values
                         clean_row = {k: v for k, v in row_dict.items() if pd.notna(v)}
                         chunk_rows.append(clean_row)
-                        
                         row_text = "\n".join([f"{col}: {val}" for col, val in clean_row.items()])
                         text_block += row_text + "\n\n---\n\n"
-                    
                     documents.append(Document(
-                        page_content=text_block, 
-                        metadata={
-                            "source": file_path, 
-                            "file_type": file_type, 
-                            "row_start": i,
-                            "row_data": chunk_rows  # Store raw data for table reconstruction
-                        }
+                        page_content=text_block,
+                        metadata={"source": file_path, "file_type": file_type, "row_start": i, "row_data": chunk_rows}
                     ))
                 return documents
             except Exception as e:
-                logging.error(f"Error loading Excel file: {e}")
+                logger.error(f"Error loading Excel file: {e}")
                 raise ValueError(f"Failed to load Excel file: {str(e)}")
-                
+
         else:
             raise ValueError(f"Unsupported file type: {file_type}")
-    
+
     def split_documents(self, documents: List[Document]) -> List[Document]:
-        """
-        Split documents into smaller chunks handling section-aware splitting.
-        """
+        """Split documents into smaller chunks with section-aware splitting."""
         final_chunks = []
-        
-        # Regex to detect standard research paper sections
         section_pattern = re.compile(
             r'^(?:\d+\.?\d*\s*)?(Abstract|Introduction|Related Work|Method(?:ology)?|Experiments|Results|Conclusion)\b.*$',
             re.IGNORECASE | re.MULTILINE
         )
-        
         for doc in documents:
             text = doc.page_content
             matches = list(section_pattern.finditer(text))
-            
             blocks = []
             if not matches:
                 blocks.append(("General", text))
@@ -245,105 +222,122 @@ class DocumentIngestionService:
                     if current_section == "Methodology":
                         current_section = "Method"
                     last_idx = match.end()
-                
                 if last_idx < len(text):
                     blocks.append((current_section, text[last_idx:].strip()))
-            
-            # Now split each block
+
             for section, block_text in blocks:
                 if not block_text:
                     continue
                 block_doc = Document(page_content=block_text, metadata={**doc.metadata, "section": section})
                 block_chunks = self.text_splitter.split_documents([block_doc])
                 final_chunks.extend(block_chunks)
-                
+
         return final_chunks
-    
+
     def generate_embeddings(self, texts: List[str]) -> List[List[float]]:
-        """
-        Generate embeddings for a list of texts.
-        
-        Args:
-            texts: List of text strings
-            
-        Returns:
-            List of embedding vectors
-        """
-        embeddings = self.embeddings.embed_documents(texts)
-        return embeddings
-    
+        """Generate embeddings using the semaphore-limited embedding service."""
+        with _embedding_semaphore:
+            return self.embeddings.embed_documents(texts)
+
+    # ─────────────────────────────────────────────────────────────
+    # MAIN INGESTION PIPELINE
+    # ─────────────────────────────────────────────────────────────
     async def ingest_document(self, file_path: str, filename: str) -> Dict[str, Any]:
         """
-        Complete ingestion pipeline for a document.
-        
-        Args:
-            file_path: Path to the uploaded file
-            filename: Original filename
-            
-        Returns:
-            Dictionary with ingestion summary
+        Full ingestion pipeline with per-stage diagnostics.
+        Logs every failure to ingestion_errors table.
         """
-        # 1. Duplicate Detection
         start_total = time.perf_counter()
-        
+
+        # Diagnostic record built incrementally
+        diag = {
+            "filename": filename,
+            "parse_stage_status": "NOT_STARTED",
+            "chunk_count": 0,
+            "embedding_stage_status": "NOT_STARTED",
+            "db_insert_status": "NOT_STARTED",
+        }
+
+        # ── 0. Duplicate check ────────────────────────────────────
         existing = self.db.query(DocumentChunk).filter(
             DocumentChunk.source_file == filename
         ).first()
-        
         if existing:
-            logging.warning(f"Duplicate document detected: {filename}")
+            logger.warning(f"[DUPLICATE] {filename} already exists — skipping.")
             raise ValueError(f"Document '{filename}' already exists.")
 
-        # Determine file type
         file_extension = Path(filename).suffix.lower().lstrip('.')
-        
-        # 2. Load document
-        start_read = time.perf_counter()
-        documents = self.load_document(file_path, file_extension)
-        file_read_ms = (time.perf_counter() - start_read) * 1000
-        
-        if not documents:
-            return {"filename": filename, "status": "empty", "num_chunks": 0}
 
-        # Summary Extraction
-        full_text = "\n".join(d.page_content for d in documents)
+        # ── 1. PARSE ─────────────────────────────────────────────
+        start_read = time.perf_counter()
+        try:
+            documents = self.load_document(file_path, file_extension)
+            file_read_ms = (time.perf_counter() - start_read) * 1000
+
+            if not documents:
+                diag["parse_stage_status"] = "EMPTY"
+                logger.warning(f"[PARSE EMPTY] {filename} produced no documents.")
+                return {"filename": filename, "status": "empty", "num_chunks": 0, "diagnostics": diag}
+
+            full_text = "\n".join(d.page_content for d in documents)
+            text_len = len(full_text)
+
+            # Phase 3: Validate extracted text
+            if text_len < MIN_TEXT_LENGTH:
+                msg = f"PDF parsing produced insufficient text ({text_len} chars, minimum {MIN_TEXT_LENGTH})"
+                logger.warning(f"[PARSE SHORT] {filename}: {msg}")
+                _log_ingestion_error(self.db, filename, "PARSE", ValueError(msg))
+                diag["parse_stage_status"] = f"SHORT_TEXT:{text_len}"
+                # Proceed anyway — don't abort, log and continue
+            else:
+                diag["parse_stage_status"] = f"OK:{len(documents)}pages:{text_len}chars"
+                logger.info(f"[PARSE OK] {filename} — {len(documents)} pages, {text_len} chars in {file_read_ms:.0f}ms")
+
+        except Exception as e:
+            diag["parse_stage_status"] = f"FAILED:{e}"
+            _log_ingestion_error(self.db, filename, "PARSE", e)
+            logger.error(f"[PARSE FAIL] {filename}: {e}\n{traceback.format_exc()}")
+            raise
+
+        # ── Summary extraction (isolated — non-fatal) ──────────
         paper_id = str(uuid.uuid4())
-        
-        # Only extract summaries for papers (e.g. not CSV/Excel unless they look like papers, 
-        # but to be safe we extract for all or if length > some threshold. We'll extract for all text/pdf.)
         if file_extension in ["pdf", "txt", "md", "docx"]:
             self._extract_and_store_summary(full_text, filename, paper_id)
 
-        # 3. Split into chunks
+        # ── 2. CHUNK ─────────────────────────────────────────────
         start_chunk = time.perf_counter()
-        
         for d in documents:
             d.metadata["paper_id"] = paper_id
-            
         chunks = self.split_documents(documents)
         chunking_ms = (time.perf_counter() - start_chunk) * 1000
-        logging.info(f"Split {filename} into {len(chunks)} chunks.")
-        
-        # 4. Generate embeddings in batches
-        texts = [chunk.page_content for chunk in chunks]
-        
-        start_embed = time.perf_counter()
-        
-        # Outer batching removed to prevent double batching and reduce API calls.
-        # The embedding service itself handles batching efficiently.
-        logging.info(f"Generating embeddings for {len(texts)} chunks of {filename}...")
-        embeddings = self.embeddings.embed_documents(texts)
-            
-        embedding_ms = (time.perf_counter() - start_embed) * 1000
+        diag["chunk_count"] = len(chunks)
+        logger.info(f"[CHUNK OK] {filename} — {len(chunks)} chunks in {chunking_ms:.0f}ms")
 
-        # 5. Store in database (Bulk insert)
-        logging.info(f"Storing {len(chunks)} chunks for {filename}...")
+        # ── 3. EMBED (semaphore-limited, retries in service) ─────
+        texts = [chunk.page_content for chunk in chunks]
+        start_embed = time.perf_counter()
+        try:
+            logger.info(f"[EMBED START] {filename} — {len(texts)} chunks (semaphore slot acquired)")
+            with _embedding_semaphore:
+                embeddings = self.embeddings.embed_documents(texts)
+            embedding_ms = (time.perf_counter() - start_embed) * 1000
+            diag["embedding_stage_status"] = f"OK:{len(embeddings)}vectors:{embedding_ms:.0f}ms"
+            logger.info(f"[EMBED OK] {filename} — {len(embeddings)} embeddings in {embedding_ms:.0f}ms")
+        except Exception as e:
+            embedding_ms = (time.perf_counter() - start_embed) * 1000
+            diag["embedding_stage_status"] = f"FAILED:{e}"
+            _log_ingestion_error(self.db, filename, "EMBEDDING", e)
+            logger.error(f"[EMBED FAIL] {filename} after {embedding_ms:.0f}ms: {e}\n{traceback.format_exc()}")
+            raise
+
+        # ── 4. DB INSERT (per-chunk safety) ──────────────────────
         start_db = time.perf_counter()
-        num_chunks = self.store_chunks(chunks, embeddings, filename)
+        num_chunks = self._store_chunks_safe(chunks, embeddings, filename, paper_id)
         db_insert_ms = (time.perf_counter() - start_db) * 1000
-        
+        diag["db_insert_status"] = f"OK:{num_chunks}rows:{db_insert_ms:.0f}ms"
+        logger.info(f"[DB COMMIT OK] {filename} — {num_chunks} chunks in {db_insert_ms:.0f}ms")
+
         total_ms = (time.perf_counter() - start_total) * 1000
-        
         metrics = {
             "file_read_ms": round(file_read_ms, 2),
             "chunking_ms": round(chunking_ms, 2),
@@ -351,21 +345,106 @@ class DocumentIngestionService:
             "db_insert_ms": round(db_insert_ms, 2),
             "total_ms": round(total_ms, 2)
         }
-        
-        logging.info(f"INGEST_METRICS: {metrics}")
-        logging.info(f"Ingestion complete for {filename}")
-        
+        logger.info(f"[INGEST COMPLETE] {filename} — {metrics}")
+
         return {
             "filename": filename,
             "num_chunks": num_chunks,
             "num_pages": len(documents),
             "status": "success",
-            "metrics": metrics
+            "metrics": metrics,
+            "diagnostics": diag
         }
 
+    def ingest_document_sync(self, file_path: str, filename: str) -> Dict[str, Any]:
+        """Synchronous wrapper for background workers."""
+        import asyncio
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        return loop.run_until_complete(self.ingest_document(file_path, filename))
+
+    # ─────────────────────────────────────────────────────────────
+    # Phase 4: Per-chunk insert — skip bad chunks, commit per-doc
+    # ─────────────────────────────────────────────────────────────
+    def _store_chunks_safe(
+        self,
+        chunks: List[Document],
+        embeddings: List[List[float]],
+        source_filename: str,
+        paper_id: str
+    ) -> int:
+        """
+        Insert chunks one-by-one. If a single chunk fails (e.g. unique violation),
+        log and skip it — do NOT abort the entire document.
+        Commits once at the end of the document.
+        """
+        inserted = 0
+        skipped = 0
+
+        for idx, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
+            try:
+                metadata = chunk.metadata.copy()
+                metadata["original_filename"] = source_filename
+                db_chunk = DocumentChunk(
+                    source_file=source_filename,
+                    chunk_index=idx,
+                    chunk_text=chunk.page_content,
+                    embedding=embedding,
+                    chunk_metadata=metadata
+                )
+                with self.db.begin_nested():   # SAVEPOINT per chunk
+                    self.db.add(db_chunk)
+                inserted += 1
+            except Exception as chunk_err:
+                skipped += 1
+                logger.warning(
+                    f"[CHUNK SKIP] {source_filename} chunk {idx}: {chunk_err}"
+                )
+                _log_ingestion_error(
+                    self.db, source_filename, f"DB_INSERT_chunk_{idx}", chunk_err
+                )
+
+        # Single commit for the whole document
+        try:
+            self.db.commit()
+        except Exception as commit_err:
+            self.db.rollback()
+            _log_ingestion_error(self.db, source_filename, "DB_COMMIT", commit_err)
+            logger.error(f"[DB COMMIT FAIL] {source_filename}: {commit_err}")
+            raise
+
+        if skipped:
+            logger.warning(f"[DB INSERT] {source_filename} — {inserted} ok, {skipped} skipped")
+
+        # Background graph extraction after commit
+        if self.graph_extractor and inserted > 0:
+            threading.Thread(
+                target=self._background_graph_extract,
+                args=(chunks, source_filename),
+                daemon=True
+            ).start()
+
+        return inserted
+
+    # ─────────────────────────────────────────────────────────────
+    # Legacy store_chunks (kept for compatibility, delegates to safe version)
+    # ─────────────────────────────────────────────────────────────
+    def store_chunks(
+        self,
+        chunks: List[Document],
+        embeddings: List[List[float]],
+        source_filename: str
+    ) -> int:
+        return self._store_chunks_safe(chunks, embeddings, source_filename, "")
+
     def _extract_and_store_summary(self, text: str, filename: str, paper_id: str):
-        """Extract structured summary using LLM and store in database."""
-        prompt = f"""Extract the following structured information from this research paper:
+        """Extract structured summary using LLM — isolated via SAVEPOINT."""
+        try:
+            with self.db.begin_nested():
+                prompt = f"""Extract the following structured information from this research paper:
 
 - Problem statement
 - Core contribution
@@ -390,107 +469,48 @@ Return valid JSON only. Format:
 Paper text (truncate if needed):
 {text[:40000]}
 """
-        gen_service = GenerationService()
-        try:
-            logging.info(f"Extracting structured summary for {filename}...")
-            response = gen_service.generate(prompt)
-            match = re.search(r'\{.*\}', response.replace('\n', ' '), re.DOTALL)
-            if match:
-                data = json.loads(match.group(0))
-                summary = PaperSummary(
-                    id=paper_id,
-                    source_file=filename,
-                    problem_statement=data.get("problem_statement"),
-                    methodology=data.get("methodology"),
-                    datasets=data.get("datasets"),
-                    evaluation_metrics=data.get("evaluation_metrics"),
-                    key_results=data.get("key_results"),
-                    limitations=data.get("limitations"),
-                    contributions=data.get("contributions")
-                )
-                self.db.add(summary)
-                self.db.commit()
-                logging.info(f"Successfully stored PaperSummary for {filename}")
-            else:
-                logging.warning(f"Could not parse JSOn for summary of {filename}")
+                gen_service = GenerationService()
+                logger.info(f"Extracting structured summary for {filename}...")
+                response = gen_service.generate(prompt)
+                match = re.search(r'\{.*\}', response.replace('\n', ' '), re.DOTALL)
+                if match:
+                    data = json.loads(match.group(0))
+                    summary = PaperSummary(
+                        id=paper_id,
+                        source_file=filename,
+                        problem_statement=data.get("problem_statement"),
+                        methodology=data.get("methodology"),
+                        datasets=data.get("datasets"),
+                        evaluation_metrics=data.get("evaluation_metrics"),
+                        key_results=data.get("key_results"),
+                        limitations=data.get("limitations"),
+                        contributions=data.get("contributions")
+                    )
+                    self.db.add(summary)
+                    logger.info(f"Successfully stored PaperSummary for {filename}")
+                else:
+                    logger.warning(f"Could not parse JSON for summary of {filename}")
         except Exception as e:
-            logging.error(f"Failed to extract summary for {filename}: {e}")
-            self.db.rollback()
+            logger.error(f"Summary extraction failed for {filename} (non-fatal): {e}")
 
     def _background_graph_extract(self, chunks: List[Document], source_filename: str):
-        """Run graph extraction in the background to prevent blocking the upload."""
+        """Run graph extraction in the background."""
         if not self.graph_extractor:
             return
-            
-        logging.info(f"Starting background graph extraction for {source_filename} (Combined first 10 chunks)")
-        
+        logger.info(f"Starting background graph extraction for {source_filename}")
         combined_text = ""
         for idx, chunk in enumerate(chunks):
             if idx >= 10:
                 break
-            # Add chunk text with clear separation for the LLM
             combined_text += f"\n--- Section {idx+1} ---\n{chunk.page_content}\n"
-                
         if combined_text:
             try:
-                # Still add a small delay to space out multiple parallel uploads safely
-                time.sleep(2.0) 
-                
+                time.sleep(2.0)
                 self.graph_extractor.extract_and_store(
-                    text=combined_text[:35000],  # cap length just in case
-                    source_file=source_filename, 
+                    text=combined_text[:35000],
+                    source_file=source_filename,
                     chunk_index=0
                 )
             except Exception as graph_err:
-                logging.error(f"Background graph extraction failed for {source_filename}: {graph_err}")
-                
-        logging.info(f"Background graph extraction completed for {source_filename}")
-
-    def store_chunks(
-        self, 
-        chunks: List[Document], 
-        embeddings: List[List[float]], 
-        source_filename: str
-    ) -> int:
-        """
-        Store document chunks and embeddings in the database using bulk insert.
-        """
-        try:
-            # We already checked for duplicates in ingest_document, so we proceed to insert.
-            # However, if we want to be safe against race conditions, we could accept that.
-            # But the requirement says "Commit once per document".
-            
-            db_chunks = []
-            for idx, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
-                metadata = chunk.metadata.copy()
-                metadata["original_filename"] = source_filename
-                
-                db_chunk = DocumentChunk(
-                    source_file=source_filename,
-                    chunk_index=idx,
-                    chunk_text=chunk.page_content,
-                    embedding=embedding,
-                    chunk_metadata=metadata
-                )
-                db_chunks.append(db_chunk)
-                
-            # Bulk save
-            self.db.add_all(db_chunks)
-            self.db.commit()
-            
-            # Start background graph extraction AFTER database commit
-            if self.graph_extractor:
-                import threading
-                threading.Thread(
-                    target=self._background_graph_extract,
-                    args=(chunks, source_filename),
-                    daemon=True
-                ).start()
-            
-            return len(db_chunks)
-        except Exception as e:
-            self.db.rollback()
-            logging.error(f"Failed to store chunks for {source_filename}: {e}")
-            raise e
-    
-
+                logger.error(f"Background graph extraction failed for {source_filename}: {graph_err}")
+        logger.info(f"Background graph extraction completed for {source_filename}")

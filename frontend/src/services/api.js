@@ -31,11 +31,34 @@ export async function uploadFile(files, onUploadProgress) {
                 }
             }
         });
+        // 202 response: { message, jobs: [{job_id, filename}], rejected: [] }
         return response.data;
     } catch (error) {
         throw error;
     }
 }
+
+/**
+ * Poll a single ingestion job until COMPLETE or FAILED.
+ * @param {string} jobId - UUID from /ingest response
+ * @param {function} onStatus - Called each poll with status string
+ * @param {number} maxWaitMs - Timeout in ms (default 3 min)
+ */
+export async function pollIngestStatus(jobId, onStatus = null, maxWaitMs = 180000) {
+    const start = Date.now();
+    let delay = 1500;
+    while (Date.now() - start < maxWaitMs) {
+        const res = await fetch(`${API_BASE_URL}/ingest/status/${jobId}`);
+        if (!res.ok) throw new Error(`Status check failed: HTTP ${res.status}`);
+        const job = await res.json();
+        if (onStatus) onStatus(job.status);
+        if (job.status === 'COMPLETE' || job.status === 'FAILED') return job;
+        await new Promise(r => setTimeout(r, delay));
+        delay = Math.min(delay * 1.3, 5000);
+    }
+    throw new Error(`Ingestion timed out after ${maxWaitMs / 1000}s`);
+}
+
 
 /**
  * Query the RAG system with a question
