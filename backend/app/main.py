@@ -141,8 +141,28 @@ def create_query_logs_table():
             conn.execute(sa_text("ANALYZE document_chunks;"))
             conn.commit()
 
-            # GIN index on search_vector (generated column) for full-text speed
-            # Wrapped in try/except — column may not exist in all deployments
+            # Auto-migrate: add search_vector generated column if missing
+            try:
+                col_check = conn.execute(sa_text("""
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'document_chunks' AND column_name = 'search_vector'
+                """)).fetchone()
+                if not col_check:
+                    logger.info("search_vector column missing — running migration...")
+                    conn.execute(sa_text("""
+                        ALTER TABLE document_chunks
+                        ADD COLUMN search_vector tsvector
+                        GENERATED ALWAYS AS (to_tsvector('english', chunk_text)) STORED
+                    """))
+                    conn.commit()
+                    logger.info("search_vector column added via migration.")
+                else:
+                    logger.info("search_vector column already exists.")
+            except Exception as sv_err:
+                conn.rollback()
+                logger.warning(f"search_vector migration skipped: {sv_err}")
+
+            # GIN index on search_vector for full-text speed
             try:
                 conn.execute(sa_text("""
                     CREATE INDEX IF NOT EXISTS idx_document_chunks_search_vector
@@ -673,7 +693,9 @@ async def query_documents(
             graph_retrieval_ms = 0.0
 
             # 1. Standard Vector/Keyword Hybrid
-            if mode in ["hybrid", "vector"]:
+            # Also runs for "graph" when Neo4j isn't available — transparently falls back
+            run_vector = mode in ["hybrid", "vector"] or (mode == "graph" and not settings.NEO4J_ENABLED)
+            if run_vector:
                 _t_vec = time.perf_counter()
                 retrieval_service = RetrievalService(db)
                 vector_chunks = retrieval_service.retrieve(
@@ -685,8 +707,8 @@ async def query_documents(
                 vector_retrieval_ms = (time.perf_counter() - _t_vec) * 1000
                 retrieved_chunks.extend(vector_chunks)
 
-            # 2. Graph Retrieval
-            if mode in ["hybrid", "graph"]:
+            # 2. Graph Retrieval (only when Neo4j is configured)
+            if mode in ["hybrid", "graph"] and settings.NEO4J_ENABLED:
                 _t_graph = time.perf_counter()
                 try:
                     from neo4j import GraphDatabase
@@ -703,8 +725,10 @@ async def query_documents(
                     retrieved_chunks.extend(graph_chunks)
                     driver.close()
                 except Exception as e:
-                    logger.warning(f"Graph retrieval failed or not configured: {e}")
+                    logger.warning(f"Graph retrieval failed: {e}")
                 graph_retrieval_ms = (time.perf_counter() - _t_graph) * 1000
+            elif mode == "graph" and not settings.NEO4J_ENABLED:
+                logger.info("Graph RAG requested but Neo4j is not configured — falling back to hybrid.")
 
             total_retrieval_so_far = (time.perf_counter() - start_retrieval) * 1000
             logger.info(

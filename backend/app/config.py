@@ -22,6 +22,11 @@ class Settings:
     NEO4J_USER: str = os.getenv("NEO4J_USER", "neo4j")
     NEO4J_PASSWORD: str = os.getenv("NEO4J_PASSWORD", "password")
     
+    @property
+    def NEO4J_ENABLED(self) -> bool:
+        """Neo4j is only enabled when NEO4J_URI is explicitly set via env var."""
+        return os.getenv("NEO4J_URI") is not None
+    
     # Document ingestion settings
     # Larger chunks = fewer API calls to Gemini embedding = faster ingestion
     CHUNK_SIZE: int = int(os.getenv("CHUNK_SIZE", "1200"))

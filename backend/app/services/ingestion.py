@@ -82,16 +82,20 @@ class DocumentIngestionService:
 
         # Init Neo4j Driver optionally for GraphRAG
         self.graph_extractor = None
-        try:
-            from neo4j import GraphDatabase
-            driver = GraphDatabase.driver(
-                settings.NEO4J_URI,
-                auth=(settings.NEO4J_USER, settings.NEO4J_PASSWORD)
-            )
-            self.graph_extractor = GraphExtractionService(driver)
-            logger.info("GraphExtractionService initialized successfully.")
-        except Exception as e:
-            logger.warning(f"Neo4j driver not initialized. Graph RAG disabled during ingestion: {e}")
+        if not settings.NEO4J_ENABLED:
+            logger.info("Neo4j not configured (NEO4J_URI not set) — Graph RAG disabled during ingestion.")
+        else:
+            try:
+                from neo4j import GraphDatabase
+                driver = GraphDatabase.driver(
+                    settings.NEO4J_URI,
+                    auth=(settings.NEO4J_USER, settings.NEO4J_PASSWORD)
+                )
+                driver.verify_connectivity()  # Fail fast if unreachable
+                self.graph_extractor = GraphExtractionService(driver)
+                logger.info("GraphExtractionService initialized successfully.")
+            except Exception as e:
+                logger.warning(f"Neo4j driver not initialized. Graph RAG disabled during ingestion: {e}")
 
     def _perform_ocr(self, file_path: str) -> str:
         """Perform OCR on a PDF file using Tesseract."""
