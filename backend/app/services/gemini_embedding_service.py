@@ -32,9 +32,11 @@ class GeminiEmbeddingService:
         genai.configure(api_key=settings.GEMINI_API_KEY)
         self.model_name = settings.GEMINI_EMBEDDING_MODEL
 
-    def embed_documents(self, texts: List[str], batch_size: int = 20) -> List[List[float]]:
+    def embed_documents(self, texts: List[str], batch_size: int = 50) -> List[List[float]]:
         """
         Generate embeddings for a list of documents in batches.
+        Batch size increased to 50 (fewer API round-trips for large docs).
+        Adds 0.5s inter-batch sleep to avoid Gemini burst rate limits.
         Retries up to 2 times on transient errors (rate limit, timeout, token size).
         Raises on auth errors or exhausted retries.
         """
@@ -98,6 +100,10 @@ class GeminiEmbeddingService:
                         f"giving up after {attempt+1} attempt(s). Error: {e}"
                     )
                     raise e
+
+            # 0.5s pause between batches to avoid Gemini burst rate limits
+            if i + batch_size < len(texts):
+                time.sleep(0.5)
 
         if len(embeddings) != len(texts):
             logger.error(

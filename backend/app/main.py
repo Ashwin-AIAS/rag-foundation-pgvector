@@ -321,7 +321,19 @@ def _background_ingest_worker(job_id: str, temp_path: str, filename: str):
         _update_doc_status(job_id, "COMPLETE", num_chunks=num_chunks)
         logger.info(f"[JOB {job_id}] COMPLETE — {num_chunks} chunks for {filename}")
     except Exception as e:
-        error_msg = str(e)[:1000]
+        # Detect the pipeline stage from known error patterns
+        raw = str(e)
+        if "Failed to load" in raw or "Insufficient extracted text" in raw:
+            stage = "parsing"
+        elif "embed" in raw.lower() or "429" in raw or "rate" in raw.lower():
+            stage = "embedding"
+        elif "chunk" in raw.lower():
+            stage = "chunking"
+        elif "db" in raw.lower() or "insert" in raw.lower() or "commit" in raw.lower():
+            stage = "db_insert"
+        else:
+            stage = "unknown"
+        error_msg = f"[{stage}] {raw}"[:1000]
         ingestion_jobs[job_id].update({"status": "FAILED", "error": error_msg})
         logger.error(f"[JOB {job_id}] FAILED for {filename}: {e}")
         try:

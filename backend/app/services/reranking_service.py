@@ -10,7 +10,7 @@ order is preserved as a fallback.
 import json
 import logging
 import asyncio
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional, Tuple
 
 import google.generativeai as genai
 from app.config import settings
@@ -36,7 +36,7 @@ class RerankingService:
         question: str,
         chunks: List[Dict[str, Any]],
         top_n: int = RERANK_RETURN_COUNT,
-    ) -> tuple[List[Dict[str, Any]], bool]:
+    ) -> Tuple[List[Dict[str, Any]], bool]:
         """
         Rerank *chunks* by relevance to *question*.
 
@@ -98,7 +98,7 @@ class RerankingService:
         )
 
     @staticmethod
-    def _parse_response(text: str, max_index: int) -> List[int] | None:
+    def _parse_response(text: str, max_index: int) -> Optional[List[int]]:
         """Parse the LLM response into a list of valid indices."""
         clean = text.strip()
         if clean.startswith("```"):

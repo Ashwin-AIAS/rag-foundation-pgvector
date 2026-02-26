@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 # Set to 1 for free/low-quota Gemini tier. Increase to 2-3 only on paid tier.
 _embedding_semaphore = threading.Semaphore(1)
 
-MIN_TEXT_LENGTH = 1000  # Phase 3: minimum characters after PDF parse
+MIN_TEXT_LENGTH = 300  # Minimum characters after text extraction — fail if less
 
 
 def _log_ingestion_error(db: Session, filename: str, stage: str, exc: Exception):
@@ -131,10 +131,29 @@ class DocumentIngestionService:
         elif file_type == "docx":
             try:
                 doc = docx.Document(file_path)
-                text = "\n".join(p.text for p in doc.paragraphs)
+                parts = []
+                # Paragraphs
+                for p in doc.paragraphs:
+                    if p.text.strip():
+                        parts.append(p.text)
+                # Tables (cell-by-cell)
+                for table in doc.tables:
+                    for row in table.rows:
+                        row_text = "\t".join(cell.text.strip() for cell in row.cells if cell.text.strip())
+                        if row_text:
+                            parts.append(row_text)
+                # Headers and Footers from each section
+                for section in doc.sections:
+                    for header_p in section.header.paragraphs:
+                        if header_p.text.strip():
+                            parts.append(header_p.text)
+                    for footer_p in section.footer.paragraphs:
+                        if footer_p.text.strip():
+                            parts.append(footer_p.text)
+                text = "\n".join(parts)
                 return [Document(page_content=text, metadata={"source": file_path, "file_type": "docx"})]
             except Exception as e:
-                logger.error(f"Error loading DOCX file: {e}")
+                logger.error(f"Error loading DOCX file: {e}\n{traceback.format_exc()}")
                 raise ValueError(f"Failed to load DOCX file: {str(e)}")
 
         elif file_type == "csv":
@@ -286,11 +305,11 @@ class DocumentIngestionService:
 
             # Phase 3: Validate extracted text
             if text_len < MIN_TEXT_LENGTH:
-                msg = f"PDF parsing produced insufficient text ({text_len} chars, minimum {MIN_TEXT_LENGTH})"
-                logger.warning(f"[PARSE SHORT] {filename}: {msg}")
+                msg = f"Insufficient extracted text ({text_len} chars, minimum {MIN_TEXT_LENGTH})"
+                logger.error(f"[PARSE SHORT] {filename}: {msg}")
                 _log_ingestion_error(self.db, filename, "PARSE", ValueError(msg))
-                diag["parse_stage_status"] = f"SHORT_TEXT:{text_len}"
-                # Proceed anyway — don't abort, log and continue
+                diag["parse_stage_status"] = f"FAILED_SHORT_TEXT:{text_len}"
+                raise ValueError(msg)
             else:
                 diag["parse_stage_status"] = f"OK:{len(documents)}pages:{text_len}chars"
                 logger.info(f"[PARSE OK] {filename} — {len(documents)} pages, {text_len} chars in {file_read_ms:.0f}ms")

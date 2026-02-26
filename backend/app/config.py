@@ -23,8 +23,9 @@ class Settings:
     NEO4J_PASSWORD: str = os.getenv("NEO4J_PASSWORD", "password")
     
     # Document ingestion settings
-    CHUNK_SIZE: int = int(os.getenv("CHUNK_SIZE", "700"))
-    CHUNK_OVERLAP: int = int(os.getenv("CHUNK_OVERLAP", "100"))
+    # Larger chunks = fewer API calls to Gemini embedding = faster ingestion
+    CHUNK_SIZE: int = int(os.getenv("CHUNK_SIZE", "1200"))
+    CHUNK_OVERLAP: int = int(os.getenv("CHUNK_OVERLAP", "150"))
     MAX_FILE_SIZE_MB: int = int(os.getenv("MAX_FILE_SIZE_MB", "15"))
     SUPPORTED_FILE_TYPES: list = ["pdf", "txt", "docx", "md", "csv", "xlsx", "xls"]
     
