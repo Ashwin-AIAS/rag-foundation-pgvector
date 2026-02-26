@@ -261,59 +261,74 @@ async def get_config():
 # Document Ingestion
 # ══════════════════════════════════════════════════════════════
 
+def _update_doc_status(job_id: str, status: str, num_chunks: int = None, error_msg: str = None):
+    """
+    Write ingestion job status to the persistent `documents` table.
+    Uses its OWN short-lived DB session — completely isolated from the
+    ingestion session so a missing `documents` table or any DB error
+    can NEVER corrupt the ingestion transaction.
+    """
+    from app.database import SessionLocal
+    _db = SessionLocal()
+    try:
+        params = {"id": job_id, "st": status}
+        set_clauses = "status=:st, updated_at=NOW()"
+        if num_chunks is not None:
+            set_clauses += ", num_chunks=:nc"
+            params["nc"] = num_chunks
+        if error_msg is not None:
+            set_clauses += ", error_message=:em"
+            params["em"] = error_msg[:1000]
+        _db.execute(sa_text(f"UPDATE documents SET {set_clauses} WHERE id=:id"), params)
+        _db.commit()
+    except Exception as e:
+        logger.warning(f"[STATUS UPDATE] Could not persist status={status} for job {job_id}: {e}")
+        try:
+            _db.rollback()
+        except Exception:
+            pass
+    finally:
+        _db.close()
+
+
 def _background_ingest_worker(job_id: str, temp_path: str, filename: str):
     """
     Background worker: runs ingestion in its own DB session.
     Updates both the in-memory ingestion_jobs dict (fast polling)
     AND the persistent `documents` DB row (survives server restarts).
+
+    IMPORTANT: all status DB writes go through _update_doc_status() which
+    opens its OWN session — the ingestion session `db` is always clean.
     """
     from app.database import SessionLocal
     db = SessionLocal()
     try:
-        # ── Mark PROCESSING in memory + DB ──
+        # ── Mark PROCESSING (memory + isolated DB write) ──
         ingestion_jobs[job_id]["status"] = "PROCESSING"
         logger.info(f"[JOB {job_id}] PROCESSING started for {filename}")
-        db.execute(
-            sa_text("UPDATE documents SET status='PROCESSING', updated_at=NOW() WHERE id=:id"),
-            {"id": job_id}
-        )
-        db.commit()
+        _update_doc_status(job_id, "PROCESSING")
 
+        # ── Run ingestion pipeline on clean dedicated session ──
         ingestion_service = DocumentIngestionService(db)
         result = ingestion_service.ingest_document_sync(temp_path, filename)
 
         num_chunks = result.get("num_chunks") or 0
-        # Duplicate documents come back with status="duplicate" — still a success
-        final_status = "COMPLETE"
-
         ingestion_jobs[job_id].update({
-            "status": final_status,
+            "status": "COMPLETE",
             "num_chunks": num_chunks,
             "metrics": result.get("metrics"),
         })
-        db.execute(
-            sa_text(
-                "UPDATE documents SET status=:st, num_chunks=:nc, updated_at=NOW() WHERE id=:id"
-            ),
-            {"st": final_status, "nc": num_chunks, "id": job_id}
-        )
-        db.commit()
+        _update_doc_status(job_id, "COMPLETE", num_chunks=num_chunks)
         logger.info(f"[JOB {job_id}] COMPLETE — {num_chunks} chunks for {filename}")
     except Exception as e:
-        error_msg = str(e)[:1000]  # cap to avoid DB truncation issues
+        error_msg = str(e)[:1000]
         ingestion_jobs[job_id].update({"status": "FAILED", "error": error_msg})
         logger.error(f"[JOB {job_id}] FAILED for {filename}: {e}")
         try:
             db.rollback()
-            db.execute(
-                sa_text(
-                    "UPDATE documents SET status='FAILED', error_message=:em, updated_at=NOW() WHERE id=:id"
-                ),
-                {"em": error_msg, "id": job_id}
-            )
-            db.commit()
-        except Exception as db_err:
-            logger.error(f"[JOB {job_id}] Could not persist FAILED status: {db_err}")
+        except Exception:
+            pass
+        _update_doc_status(job_id, "FAILED", error_msg=error_msg)
     finally:
         db.close()
         if os.path.exists(temp_path):
