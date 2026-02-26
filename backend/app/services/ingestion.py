@@ -30,8 +30,9 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-# ── Phase 5: Global semaphore — max 3 concurrent embedding calls ────────────
-_embedding_semaphore = threading.Semaphore(3)
+# ── Global semaphore — limit concurrent embedding calls to 1 (prevents Gemini 429s) ──
+# Set to 1 for free/low-quota Gemini tier. Increase to 2-3 only on paid tier.
+_embedding_semaphore = threading.Semaphore(1)
 
 MIN_TEXT_LENGTH = 1000  # Phase 3: minimum characters after PDF parse
 
@@ -263,8 +264,9 @@ class DocumentIngestionService:
             DocumentChunk.source_file == filename
         ).first()
         if existing:
-            logger.warning(f"[DUPLICATE] {filename} already exists — skipping.")
-            raise ValueError(f"Document '{filename}' already exists.")
+            logger.warning(f"[DUPLICATE] {filename} already exists — skipping (not a failure).")
+            # Return gracefully so worker marks job COMPLETE, not FAILED
+            return {"filename": filename, "status": "duplicate", "num_chunks": 0, "num_pages": 0, "metrics": {}, "diagnostics": {"parse_stage_status": "DUPLICATE"}}
 
         file_extension = Path(filename).suffix.lower().lstrip('.')
 
@@ -299,10 +301,17 @@ class DocumentIngestionService:
             logger.error(f"[PARSE FAIL] {filename}: {e}\n{traceback.format_exc()}")
             raise
 
-        # ── Summary extraction (isolated — non-fatal) ──────────
+        # ── Summary extraction — run in background thread with its own DB session ──
+        # Moved off critical path: previously caused 3-8s blocking LLM call AND
+        # risked leaving the shared session in InFailedSqlTransaction on error.
         paper_id = str(uuid.uuid4())
         if file_extension in ["pdf", "txt", "md", "docx"]:
-            self._extract_and_store_summary(full_text, filename, paper_id)
+            threading.Thread(
+                target=self._background_summary_extract,
+                args=(full_text, filename, paper_id),
+                daemon=True
+            ).start()
+            logger.info(f"[SUMMARY] Background summary extraction started for {filename}")
 
         # ── 2. CHUNK ─────────────────────────────────────────────
         start_chunk = time.perf_counter()
@@ -313,12 +322,13 @@ class DocumentIngestionService:
         diag["chunk_count"] = len(chunks)
         logger.info(f"[CHUNK OK] {filename} — {len(chunks)} chunks in {chunking_ms:.0f}ms")
 
-        # ── 3. EMBED (semaphore-limited, retries in service) ─────
+        # ── 3. EMBED (semaphore-limited to 1 slot, retries in service) ──────────
         texts = [chunk.page_content for chunk in chunks]
         start_embed = time.perf_counter()
         try:
-            logger.info(f"[EMBED START] {filename} — {len(texts)} chunks (semaphore slot acquired)")
+            logger.info(f"[EMBED START] {filename} — {len(texts)} chunks — waiting for semaphore slot...")
             with _embedding_semaphore:
+                logger.info(f"[EMBED START] {filename} — semaphore acquired, calling API")
                 embeddings = self.embeddings.embed_documents(texts)
             embedding_ms = (time.perf_counter() - start_embed) * 1000
             diag["embedding_stage_status"] = f"OK:{len(embeddings)}vectors:{embedding_ms:.0f}ms"
@@ -377,47 +387,68 @@ class DocumentIngestionService:
         paper_id: str
     ) -> int:
         """
-        Insert chunks one-by-one. If a single chunk fails (e.g. unique violation),
-        log and skip it — do NOT abort the entire document.
-        Commits once at the end of the document.
+        Bulk-insert all chunks in a single DB round-trip.
+        Falls back to per-chunk insert if the bulk insert fails (e.g. unique constraint).
+        ~10x faster than per-chunk savepoints for large documents.
         """
         inserted = 0
         skipped = 0
 
+        # Build list of dicts for bulk insert
+        mappings = []
         for idx, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
-            try:
-                metadata = chunk.metadata.copy()
-                metadata["original_filename"] = source_filename
-                db_chunk = DocumentChunk(
-                    source_file=source_filename,
-                    chunk_index=idx,
-                    chunk_text=chunk.page_content,
-                    embedding=embedding,
-                    chunk_metadata=metadata
-                )
-                with self.db.begin_nested():   # SAVEPOINT per chunk
-                    self.db.add(db_chunk)
-                inserted += 1
-            except Exception as chunk_err:
-                skipped += 1
-                logger.warning(
-                    f"[CHUNK SKIP] {source_filename} chunk {idx}: {chunk_err}"
-                )
-                _log_ingestion_error(
-                    self.db, source_filename, f"DB_INSERT_chunk_{idx}", chunk_err
-                )
+            metadata = chunk.metadata.copy()
+            metadata["original_filename"] = source_filename
+            mappings.append({
+                "source_file": source_filename,
+                "chunk_index": idx,
+                "chunk_text": chunk.page_content,
+                "embedding": embedding,
+                "chunk_metadata": metadata,
+            })
 
-        # Single commit for the whole document
+        # ── Attempt bulk insert first ─────────────────────────────
         try:
+            self.db.bulk_insert_mappings(DocumentChunk, mappings)
             self.db.commit()
-        except Exception as commit_err:
+            inserted = len(mappings)
+            logger.info(f"[DB BULK INSERT OK] {source_filename} — {inserted} chunks in one batch")
+        except Exception as bulk_err:
             self.db.rollback()
-            _log_ingestion_error(self.db, source_filename, "DB_COMMIT", commit_err)
-            logger.error(f"[DB COMMIT FAIL] {source_filename}: {commit_err}")
-            raise
+            logger.warning(
+                f"[DB BULK FAIL] {source_filename} — falling back to per-chunk insert: {bulk_err}"
+            )
+            # ── Fallback: per-chunk insert with SAVEPOINT ─────────
+            for idx, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
+                try:
+                    metadata = chunk.metadata.copy()
+                    metadata["original_filename"] = source_filename
+                    db_chunk = DocumentChunk(
+                        source_file=source_filename,
+                        chunk_index=idx,
+                        chunk_text=chunk.page_content,
+                        embedding=embedding,
+                        chunk_metadata=metadata
+                    )
+                    with self.db.begin_nested():  # SAVEPOINT per chunk
+                        self.db.add(db_chunk)
+                    inserted += 1
+                except Exception as chunk_err:
+                    skipped += 1
+                    logger.warning(f"[CHUNK SKIP] {source_filename} chunk {idx}: {chunk_err}")
+                    _log_ingestion_error(
+                        self.db, source_filename, f"DB_INSERT_chunk_{idx}", chunk_err
+                    )
+            try:
+                self.db.commit()
+            except Exception as commit_err:
+                self.db.rollback()
+                _log_ingestion_error(self.db, source_filename, "DB_COMMIT", commit_err)
+                logger.error(f"[DB COMMIT FAIL] {source_filename}: {commit_err}")
+                raise
 
-        if skipped:
-            logger.warning(f"[DB INSERT] {source_filename} — {inserted} ok, {skipped} skipped")
+            if skipped:
+                logger.warning(f"[DB INSERT] {source_filename} — {inserted} ok, {skipped} skipped")
 
         # Background graph extraction after commit
         if self.graph_extractor and inserted > 0:
@@ -440,11 +471,17 @@ class DocumentIngestionService:
     ) -> int:
         return self._store_chunks_safe(chunks, embeddings, source_filename, "")
 
-    def _extract_and_store_summary(self, text: str, filename: str, paper_id: str):
-        """Extract structured summary using LLM — isolated via SAVEPOINT."""
+    def _background_summary_extract(self, text: str, filename: str, paper_id: str):
+        """
+        Run LLM-based structured summary extraction in a background thread.
+        Uses its OWN DB session — completely isolated from the main ingestion session.
+        This prevents the 3-8s blocking LLM call from stalling the pipeline AND
+        eliminates the InFailedSqlTransaction risk on the shared session.
+        """
+        from app.database import SessionLocal
+        db = SessionLocal()
         try:
-            with self.db.begin_nested():
-                prompt = f"""Extract the following structured information from this research paper:
+            prompt = f"""Extract the following structured information from this research paper:
 
 - Problem statement
 - Core contribution
@@ -469,29 +506,36 @@ Return valid JSON only. Format:
 Paper text (truncate if needed):
 {text[:40000]}
 """
-                gen_service = GenerationService()
-                logger.info(f"Extracting structured summary for {filename}...")
-                response = gen_service.generate(prompt)
-                match = re.search(r'\{.*\}', response.replace('\n', ' '), re.DOTALL)
-                if match:
-                    data = json.loads(match.group(0))
-                    summary = PaperSummary(
-                        id=paper_id,
-                        source_file=filename,
-                        problem_statement=data.get("problem_statement"),
-                        methodology=data.get("methodology"),
-                        datasets=data.get("datasets"),
-                        evaluation_metrics=data.get("evaluation_metrics"),
-                        key_results=data.get("key_results"),
-                        limitations=data.get("limitations"),
-                        contributions=data.get("contributions")
-                    )
-                    self.db.add(summary)
-                    logger.info(f"Successfully stored PaperSummary for {filename}")
-                else:
-                    logger.warning(f"Could not parse JSON for summary of {filename}")
+            gen_service = GenerationService()
+            logger.info(f"[SUMMARY BG] Extracting structured summary for {filename}...")
+            response = gen_service.generate(prompt)
+            match = re.search(r'\{.*\}', response.replace('\n', ' '), re.DOTALL)
+            if match:
+                data = json.loads(match.group(0))
+                summary = PaperSummary(
+                    id=paper_id,
+                    source_file=filename,
+                    problem_statement=data.get("problem_statement"),
+                    methodology=data.get("methodology"),
+                    datasets=data.get("datasets"),
+                    evaluation_metrics=data.get("evaluation_metrics"),
+                    key_results=data.get("key_results"),
+                    limitations=data.get("limitations"),
+                    contributions=data.get("contributions")
+                )
+                db.add(summary)
+                db.commit()
+                logger.info(f"[SUMMARY BG] Stored PaperSummary for {filename}")
+            else:
+                logger.warning(f"[SUMMARY BG] Could not parse JSON summary for {filename}")
         except Exception as e:
-            logger.error(f"Summary extraction failed for {filename} (non-fatal): {e}")
+            logger.error(f"[SUMMARY BG] Summary extraction failed for {filename} (non-fatal): {e}")
+            try:
+                db.rollback()
+            except Exception:
+                pass
+        finally:
+            db.close()
 
     def _background_graph_extract(self, chunks: List[Document], source_filename: str):
         """Run graph extraction in the background."""

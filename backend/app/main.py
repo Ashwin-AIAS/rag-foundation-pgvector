@@ -26,7 +26,7 @@ from app.services.reranking_service import RerankingService
 from app.services.graph_retrieval_service import GraphRetrievalService
 from app.models.query import QueryRequest, QueryResponse, RetrievedChunk
 from app.models.feedback import FeedbackRequest, FeedbackResponse
-from app.models.document import Feedback, DocumentChunk
+from app.models.document import Feedback, DocumentChunk, Document
 
 logger = logging.getLogger(__name__)
 
@@ -110,6 +110,20 @@ def create_query_logs_table():
                     limitations TEXT,
                     contributions TEXT,
                     created_at TIMESTAMPTZ DEFAULT NOW()
+                )
+            """))
+            conn.commit()
+
+            # Persistent document status table
+            conn.execute(sa_text("""
+                CREATE TABLE IF NOT EXISTS documents (
+                    id VARCHAR(36) PRIMARY KEY,
+                    filename VARCHAR(255) NOT NULL,
+                    status VARCHAR(20) NOT NULL DEFAULT 'UPLOADED',
+                    num_chunks INTEGER,
+                    error_message TEXT,
+                    created_at TIMESTAMPTZ DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ DEFAULT NOW()
                 )
             """))
             conn.commit()
@@ -250,27 +264,56 @@ async def get_config():
 def _background_ingest_worker(job_id: str, temp_path: str, filename: str):
     """
     Background worker: runs ingestion in its own DB session.
-    Updates ingestion_jobs[job_id] with progress and final status.
+    Updates both the in-memory ingestion_jobs dict (fast polling)
+    AND the persistent `documents` DB row (survives server restarts).
     """
     from app.database import SessionLocal
     db = SessionLocal()
     try:
+        # ── Mark PROCESSING in memory + DB ──
         ingestion_jobs[job_id]["status"] = "PROCESSING"
         logger.info(f"[JOB {job_id}] PROCESSING started for {filename}")
+        db.execute(
+            sa_text("UPDATE documents SET status='PROCESSING', updated_at=NOW() WHERE id=:id"),
+            {"id": job_id}
+        )
+        db.commit()
 
         ingestion_service = DocumentIngestionService(db)
         result = ingestion_service.ingest_document_sync(temp_path, filename)
 
+        num_chunks = result.get("num_chunks") or 0
+        # Duplicate documents come back with status="duplicate" — still a success
+        final_status = "COMPLETE"
+
         ingestion_jobs[job_id].update({
-            "status": "COMPLETE",
-            "num_chunks": result.get("num_chunks"),
+            "status": final_status,
+            "num_chunks": num_chunks,
             "metrics": result.get("metrics"),
         })
-        logger.info(f"[JOB {job_id}] COMPLETE — {result.get('num_chunks')} chunks for {filename}")
+        db.execute(
+            sa_text(
+                "UPDATE documents SET status=:st, num_chunks=:nc, updated_at=NOW() WHERE id=:id"
+            ),
+            {"st": final_status, "nc": num_chunks, "id": job_id}
+        )
+        db.commit()
+        logger.info(f"[JOB {job_id}] COMPLETE — {num_chunks} chunks for {filename}")
     except Exception as e:
-        ingestion_jobs[job_id].update({"status": "FAILED", "error": str(e)})
+        error_msg = str(e)[:1000]  # cap to avoid DB truncation issues
+        ingestion_jobs[job_id].update({"status": "FAILED", "error": error_msg})
         logger.error(f"[JOB {job_id}] FAILED for {filename}: {e}")
-        db.rollback()
+        try:
+            db.rollback()
+            db.execute(
+                sa_text(
+                    "UPDATE documents SET status='FAILED', error_message=:em, updated_at=NOW() WHERE id=:id"
+                ),
+                {"em": error_msg, "id": job_id}
+            )
+            db.commit()
+        except Exception as db_err:
+            logger.error(f"[JOB {job_id}] Could not persist FAILED status: {db_err}")
     finally:
         db.close()
         if os.path.exists(temp_path):
@@ -327,12 +370,30 @@ async def ingest_document(
         ingestion_jobs[job_id] = {
             "job_id": job_id,
             "filename": file.filename,
-            "status": "UPLOADING",
+            "status": "UPLOADED",
             "num_chunks": None,
             "error": None,
             "metrics": None,
         }
-        logger.info(f"[JOB {job_id}] UPLOADING — {file.filename} saved to {temp_path}")
+        logger.info(f"[JOB {job_id}] UPLOADED — {file.filename} saved to {temp_path}")
+
+        # Persist initial Document row synchronously (fast — just one INSERT)
+        from app.database import SessionLocal
+        _init_db = SessionLocal()
+        try:
+            _init_db.execute(
+                sa_text("""
+                    INSERT INTO documents (id, filename, status)
+                    VALUES (:id, :fn, 'UPLOADED')
+                    ON CONFLICT (id) DO NOTHING
+                """),
+                {"id": job_id, "fn": file.filename}
+            )
+            _init_db.commit()
+        except Exception as _ins_err:
+            logger.warning(f"Could not persist Document row for {file.filename}: {_ins_err}")
+        finally:
+            _init_db.close()
 
         # Schedule background ingestion (uses its own DB session)
         background_tasks.add_task(_background_ingest_worker, job_id, temp_path, file.filename)
@@ -349,12 +410,70 @@ async def ingest_document(
 
 
 @app.get("/ingest/status/{job_id}")
-async def ingest_status(job_id: str):
-    """Poll the status of an async ingestion job."""
+async def ingest_status(job_id: str, db: Session = Depends(get_db)):
+    """
+    Poll the status of an async ingestion job.
+    Checks the in-memory dict first (fastest during active processing),
+    then falls back to the persistent `documents` table (survives restarts).
+    """
+    # Fast path: in-memory dict (updated by the background worker in real-time)
     job = ingestion_jobs.get(job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found.")
-    return job
+    if job is not None:
+        return job
+
+    # Fallback: check persistent DB (for jobs from previous server instances)
+    try:
+        row = db.execute(
+            sa_text("SELECT id, filename, status, num_chunks, error_message FROM documents WHERE id = :id"),
+            {"id": job_id}
+        ).fetchone()
+        if row:
+            return {
+                "job_id": row.id,
+                "filename": row.filename,
+                "status": row.status,
+                "num_chunks": row.num_chunks,
+                "error": row.error_message,
+                "metrics": None,
+            }
+    except Exception:
+        pass
+
+    raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found.")
+
+
+@app.get("/ingest/status")
+async def list_ingest_statuses(
+    limit: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db)
+):
+    """
+    Return recent ingestion job statuses from the persistent `documents` table.
+    Useful for viewing all upload history after a server restart.
+    """
+    try:
+        rows = db.execute(sa_text("""
+            SELECT id, filename, status, num_chunks, error_message, created_at, updated_at
+            FROM documents
+            ORDER BY created_at DESC
+            LIMIT :limit
+        """), {"limit": limit}).fetchall()
+        return {
+            "jobs": [
+                {
+                    "job_id": row.id,
+                    "filename": row.filename,
+                    "status": row.status,
+                    "num_chunks": row.num_chunks,
+                    "error": row.error_message,
+                    "created_at": row.created_at.isoformat() if row.created_at else None,
+                    "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+                }
+                for row in rows
+            ]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to list statuses: {str(e)}")
 
 
 @app.get("/ingest/errors")

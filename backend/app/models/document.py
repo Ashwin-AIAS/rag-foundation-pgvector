@@ -5,6 +5,27 @@ from pgvector.sqlalchemy import Vector
 from app.database import Base
 
 
+class Document(Base):
+    """
+    Persistent tracking record for every upload/ingestion job.
+
+    Status lifecycle: UPLOADED → PROCESSING → COMPLETE | FAILED | DUPLICATE | EMPTY
+    Survives server restarts unlike the in-memory ingestion_jobs dict.
+    """
+    __tablename__ = "documents"
+
+    id = Column(String(36), primary_key=True, index=True)          # UUID string
+    filename = Column(String(255), nullable=False, index=True)
+    status = Column(String(20), nullable=False, default="UPLOADED")  # UPLOADED/PROCESSING/COMPLETE/FAILED/DUPLICATE
+    num_chunks = Column(Integer, nullable=True)
+    error_message = Column(Text, nullable=True)
+    created_at = Column(TIMESTAMP, server_default=func.now())
+    updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
+
+    def __repr__(self):
+        return f"<Document(id={self.id}, filename={self.filename}, status={self.status})>"
+
+
 class DocumentChunk(Base):
     """
     SQLAlchemy model for document chunks with embeddings.
