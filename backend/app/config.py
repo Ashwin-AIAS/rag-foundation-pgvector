@@ -21,11 +21,28 @@ class Settings:
     NEO4J_URI: str = os.getenv("NEO4J_URI", "bolt://127.0.0.1:7687")
     NEO4J_USER: str = os.getenv("NEO4J_USER", "neo4j")
     NEO4J_PASSWORD: str = os.getenv("NEO4J_PASSWORD", "password")
+    _neo4j_checked: bool = False
+    _neo4j_available: bool = False
     
     @property
     def NEO4J_ENABLED(self) -> bool:
-        """Neo4j is only enabled when NEO4J_URI is explicitly set via env var."""
-        return os.getenv("NEO4J_URI") is not None
+        """Neo4j is enabled only when the server is actually reachable (checked once)."""
+        if not self._neo4j_checked:
+            self._neo4j_checked = True
+            try:
+                from neo4j import GraphDatabase
+                driver = GraphDatabase.driver(
+                    self.NEO4J_URI,
+                    auth=(self.NEO4J_USER, self.NEO4J_PASSWORD)
+                )
+                driver.verify_connectivity()
+                driver.close()
+                self._neo4j_available = True
+                print(f"Neo4j connected at {self.NEO4J_URI} — Graph RAG enabled.")
+            except Exception as e:
+                self._neo4j_available = False
+                print(f"Neo4j not reachable ({e}) — Graph RAG disabled.")
+        return self._neo4j_available
     
     # Document ingestion settings
     # Larger chunks = fewer API calls to Gemini embedding = faster ingestion
