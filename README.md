@@ -1,54 +1,63 @@
-# Local RAG Development Infrastructure
+# RAG System — Full-Stack Retrieval-Augmented Generation
 
-A clean, local-only development infrastructure for building Retrieval-Augmented Generation (RAG) systems with Google Gemini and a React frontend.
+A full-stack Retrieval-Augmented Generation (RAG) system built with **FastAPI**, **React**, **PostgreSQL + pgvector**, and **Google Gemini** — deployed on **Render** (backend) and **Vercel** (frontend).
 
-## Overview
+## Features
 
-This project provides a complete foundation for building RAG applications with:
+- **Document Ingestion** — Upload PDF, DOCX, TXT, Markdown, CSV, and Excel files with background processing and real-time status tracking
+- **Semantic Retrieval** — Vector similarity search powered by pgvector and Gemini `text-embedding-004`
+- **Hybrid Retrieval** — Combine vector search with keyword-based full-text search for better recall
+- **Graph RAG** _(optional)_ — Knowledge graph extraction and retrieval via Neo4j (auto-detected; disabled gracefully if unavailable)
+- **Reranking** — Cross-encoder reranking for improved answer relevance
+- **Grounded Generation** — Context-aware answers with source citations using Gemini 1.5 Flash
+- **Conversation History** — Multi-turn conversations with context-aware follow-up
+- **Feedback System** — Thumbs up/down feedback on answers for quality tracking
+- **Admin Analytics** — Dashboard with ingestion stats, query metrics, and feedback overview
+- **Document Management** — View, select, and delete uploaded documents
 
-- **Backend**: Python + FastAPI
-- **Frontend**: React + Vite + Tailwind CSS
-- **Database**: PostgreSQL with pgvector extension
-- **AI Models**: Google Gemini (Embeddings & Generation)
-- **Containerization**: Docker Compose for easy local development
+## Tech Stack
 
-## Prerequisites
-
-- [Docker](https://www.docker.com/get-started) and Docker Compose
-- [Node.js](https://nodejs.org/) (v18+ for frontend)
-- [Git](https://git-scm.com/)
-- Google Cloud API key (get one from [Google AI Studio](https://aistudio.google.com/))
+| Layer        | Technology                               |
+| ------------ | ---------------------------------------- |
+| **Backend**  | Python, FastAPI                          |
+| **Frontend** | React, Vite                              |
+| **Database** | PostgreSQL + pgvector                    |
+| **Graph DB** | Neo4j _(optional, auto-detected)_        |
+| **AI**       | Google Gemini (Embeddings & Generation)  |
+| **Hosting**  | Render (backend + DB), Vercel (frontend) |
 
 ## Quick Start
 
-### 1. Set Up Environment Variables
+### Prerequisites
 
-Copy the example environment file and configure your settings:
+- [Docker](https://www.docker.com/get-started) and Docker Compose (for local development)
+- [Node.js](https://nodejs.org/) v18+
+- [Git](https://git-scm.com/)
+- Google Gemini API key — get one from [Google AI Studio](https://aistudio.google.com/)
+
+### 1. Clone & Configure
 
 ```bash
+git clone https://github.com/Ashwin-AIAS/rag-foundation-pgvector.git
+cd rag-foundation-pgvector
 cp .env.example .env
 ```
 
-Edit `.env` and add your Google Gemini API key:
+Edit `.env` and add your Gemini API key:
 
 ```env
 GEMINI_API_KEY=your-gemini-api-key-here
 ```
 
-### 2. Start the Backend Services
+### 2. Start the Backend (Docker)
 
 ```bash
 docker-compose up -d
 ```
 
-This will:
-
-- Start PostgreSQL with pgvector extension
-- Build and start the FastAPI backend (available at `http://localhost:8000`)
+This starts PostgreSQL (with pgvector) and the FastAPI backend at `http://localhost:8000`.
 
 ### 3. Start the Frontend
-
-Open a new terminal and navigate to the `frontend` directory:
 
 ```bash
 cd frontend
@@ -58,17 +67,13 @@ npm run dev
 
 The frontend will be available at `http://localhost:5173`.
 
-### 4. Verify the Setup
-
-**Backend Health Check:**
+### 4. Verify
 
 ```bash
+# Backend health
 curl http://localhost:8000/health
-```
 
-**Database Health Check:**
-
-```bash
+# Database health
 curl http://localhost:8000/db-health
 ```
 
@@ -86,89 +91,99 @@ Expected response:
 
 ```
 RAG/
-├── docker-compose.yml          # Backend services configuration
-├── .env.example                # Environment variable template
-├── .env                        # Local environment variables
-├── README.md                   # This file
-├── backend/                    # FastAPI application
-│   ├── app/
-│   │   ├── main.py             # API endpoints
-│   │   ├── config.py           # Configuration (Gemini, DB, etc.)
-│   │   ├── database.py         # Database connection
-│   │   └── services/           # Business logic (Ingestion, Generation)
-├── database/                   # Database initialization
-└── frontend/                   # React application
-    ├── src/
-    │   ├── components/         # UI Components (Upload, Chat)
-    │   ├── services/           # API integration
-    │   └── App.jsx             # Main application logic
+├── docker-compose.yml              # Local dev services
+├── .env.example                    # Environment variable template
+├── DEPLOYMENT.md                   # Production deployment guide
+├── backend/
+│   ├── Dockerfile
+│   ├── requirements.txt
+│   └── app/
+│       ├── main.py                 # API endpoints & routing
+│       ├── config.py               # Settings (DB, Gemini, Neo4j, etc.)
+│       ├── database.py             # PostgreSQL connection
+│       ├── models/
+│       │   └── document.py         # Document status model
+│       └── services/
+│           ├── ingestion.py        # Document parsing, chunking, embedding
+│           ├── retrieval_service.py # Vector + hybrid retrieval
+│           ├── reranking_service.py # Cross-encoder reranking
+│           ├── generation_service.py# Gemini answer generation
+│           ├── prompt_service.py   # Prompt templates
+│           ├── document_service.py # Document CRUD & status
+│           ├── gemini_embedding_service.py  # Batch embedding with rate limiting
+│           ├── graph_extraction_service.py  # Neo4j knowledge graph builder
+│           └── graph_retrieval_service.py   # Graph-based retrieval
+└── frontend/
+    ├── package.json
+    └── src/
+        ├── App.jsx                 # Main application
+        ├── index.css               # Styling
+        ├── services/
+        │   └── api.js              # Backend API integration
+        └── components/
+            ├── FileUpload.jsx      # Drag-and-drop upload with status
+            ├── QuestionInput.jsx   # Query input with retrieval mode selector
+            ├── AnswerDisplay.jsx   # Markdown answers with source citations
+            ├── DocumentSelector.jsx# Document filter & management
+            ├── ConversationHistory.jsx  # Multi-turn chat history
+            ├── HistoryItem.jsx     # Individual conversation entry
+            ├── FeedbackButtons.jsx # Thumbs up/down feedback
+            ├── AdminAnalytics.jsx  # Analytics dashboard
+            ├── LoadingOverlay.jsx  # Processing indicator
+            └── Toast.jsx           # Notification toasts
 ```
 
 ## Architecture
 
-### Backend (FastAPI)
+### Document Ingestion Pipeline
 
-The backend runs on **port 8000** and handles:
+1. **Upload** → Files are sent to `/upload` and saved immediately (HTTP 202)
+2. **Background Processing** → Parsing, chunking, and embedding run asynchronously
+3. **Embed** → Google Gemini `text-embedding-004` generates 768-dim vectors (with retry & rate limiting)
+4. **Store** → Chunks + embeddings are saved to PostgreSQL with per-chunk transaction safety
 
-- Document ingestion and processing
-- Vector embedding generation using `text-embedding-004`
-- Similarity search via `pgvector`
-- Response generation using `gemini-1.5-flash`
+### Retrieval Modes
 
-### Frontend (React)
+| Mode       | Description                                          |
+| ---------- | ---------------------------------------------------- |
+| **Vector** | Cosine similarity search via pgvector                |
+| **Hybrid** | Vector search + full-text keyword search combined    |
+| **Graph**  | Knowledge graph traversal via Neo4j _(if available)_ |
 
-The frontend runs on **port 5173** (dev) and provides:
+### Generation
 
-- Drag-and-drop file upload
-- Interactive chat interface
-- Real-time processing status
-- Source citations for answers
+Answers are generated by **Gemini 1.5 Flash** with:
 
-### Database (PostgreSQL + pgvector)
+- Retrieved context chunks as grounding
+- Source citations linking back to original documents
+- Configurable temperature and max token settings
 
-Runs on **port 5432** and stores:
+## Deployment
 
-- Document chunks
-- Vector embeddings (768 dimensions)
-- Document metadata
+The app is deployed to production using:
 
-## Document Ingestion
+- **Backend**: Render (Docker web service)
+- **Database**: Render PostgreSQL (with pgvector)
+- **Frontend**: Vercel (static Vite build)
 
-The system supports ingesting the following file types:
-
-- **PDF** (`.pdf`)
-- **Text** (`.txt`)
-- **Word** (`.docx`)
-- **Markdown** (`.md`)
-- **CSV** (`.csv`)
-- **Excel** (`.xlsx`, `.xls`)
-
-### How It Works
-
-1. **Upload**: Files are sent to `/ingest`.
-2. **Extract & Chunk**: Text is extracted and split into chunks (default 1000 chars).
-3. **Embed**: Google's `text-embedding-004` model generates embeddings.
-4. **Store**: Chunks and embeddings are saved to PostgreSQL.
-
-### API Usage
-
-```bash
-curl -X POST http://localhost:8000/ingest \
-  -F "file=@document.pdf"
-```
+See [DEPLOYMENT.md](DEPLOYMENT.md) for the full deployment guide.
 
 ## Environment Variables
 
 | Variable                 | Description              | Default                     |
 | ------------------------ | ------------------------ | --------------------------- |
-| `GEMINI_API_KEY`         | Google AI Studio API Key | (required)                  |
-| `GEMINI_MODEL`           | Generation Model         | `gemini-1.5-flash`          |
-| `GEMINI_EMBEDDING_MODEL` | Embedding Model          | `models/text-embedding-004` |
-| `POSTGRES_USER`          | DB User                  | `raguser`                   |
-| `POSTGRES_PASSWORD`      | DB Password              | `ragpassword`               |
-| `POSTGRES_DB`            | DB Name                  | `ragdb`                     |
-| `CHUNK_SIZE`             | Characters per chunk     | `1000`                      |
-| `CHUNK_OVERLAP`          | Overlap characters       | `150`                       |
+| `GEMINI_API_KEY`         | Google AI Studio API Key | _(required)_                |
+| `GEMINI_MODEL`           | Generation model         | `gemini-1.5-flash`          |
+| `GEMINI_EMBEDDING_MODEL` | Embedding model          | `models/text-embedding-004` |
+| `DATABASE_URL`           | Full PostgreSQL URL      | _(auto-built from parts)_   |
+| `POSTGRES_USER`          | DB user                  | `raguser`                   |
+| `POSTGRES_PASSWORD`      | DB password              | `ragpassword`               |
+| `POSTGRES_DB`            | DB name                  | `ragdb`                     |
+| `CHUNK_SIZE`             | Characters per chunk     | `1200`                      |
+| `CHUNK_OVERLAP`          | Overlap between chunks   | `150`                       |
+| `TOP_K`                  | Chunks to retrieve       | `5`                         |
+| `SIMILARITY_THRESHOLD`   | Min cosine similarity    | `0.7`                       |
+| `NEO4J_URI`              | Neo4j connection URI     | `bolt://127.0.0.1:7687`     |
 
 ## Troubleshooting
 
@@ -180,11 +195,15 @@ docker-compose logs -f
 
 ### Database connection issues
 
-Ensure the `postgres` container is healthy:
-
 ```bash
 docker-compose ps
 ```
+
+Ensure the `postgres` container is healthy.
+
+### Neo4j not available
+
+Neo4j is **optional**. If unavailable, the system automatically disables Graph RAG mode and continues with Vector and Hybrid retrieval.
 
 ## License
 
