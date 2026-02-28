@@ -99,23 +99,50 @@ class RerankingService:
 
     @staticmethod
     def _parse_response(text: str, max_index: int) -> Optional[List[int]]:
-        """Parse the LLM response into a list of valid indices."""
+        """Parse the LLM response into a list of valid indices.
+        
+        Robust against common LLM output issues:
+        - Extra text before/after the JSON array
+        - Markdown code fences
+        - Truncated arrays (missing closing bracket)
+        """
+        import re
+
         clean = text.strip()
+
+        # Strip markdown code fences if present
         if clean.startswith("```"):
             clean = clean.split("\n", 1)[-1]
         if clean.endswith("```"):
             clean = clean.rsplit("```", 1)[0]
         clean = clean.strip()
 
-        try:
-            parsed = json.loads(clean)
-        except json.JSONDecodeError:
-            logger.warning(f"Reranker JSON parse failed: {clean[:200]}")
-            return None
+        # Strategy 1: Try to extract a complete JSON array from anywhere in the response
+        array_match = re.search(r'\[[\d\s,]+\]', clean)
+        if array_match:
+            try:
+                parsed = json.loads(array_match.group(0))
+                if isinstance(parsed, list):
+                    valid = [int(i) for i in parsed if isinstance(i, (int, float)) and 0 <= int(i) < max_index]
+                    if valid:
+                        return valid
+            except json.JSONDecodeError:
+                pass
 
-        if not isinstance(parsed, list):
-            return None
+        # Strategy 2: Extract all integers from the response (handles truncated arrays like "[3, 5, 2,")
+        numbers = re.findall(r'\b(\d+)\b', clean)
+        if numbers:
+            valid = [int(n) for n in numbers if 0 <= int(n) < max_index]
+            # Deduplicate while preserving order
+            seen = set()
+            deduped = []
+            for v in valid:
+                if v not in seen:
+                    seen.add(v)
+                    deduped.append(v)
+            if deduped:
+                logger.info(f"Reranker indices extracted via fallback regex: {deduped}")
+                return deduped
 
-        # Filter to valid integer indices
-        valid = [int(i) for i in parsed if isinstance(i, (int, float)) and 0 <= int(i) < max_index]
-        return valid if valid else None
+        logger.warning(f"Reranker parse failed completely: {clean[:200]}")
+        return None
