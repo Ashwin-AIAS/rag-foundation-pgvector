@@ -35,17 +35,20 @@ class PromptService:
             2. Retrieved context with source citations
             3. User's question
         """
-        # Check if we are in balanced comparison mode
+        # Check if we are in balanced comparison mode or multi-doc mode
         is_balanced_mode = any(chunk.get("metadata", {}).get("balanced_mode", False) for chunk in retrieved_chunks)
+        is_multi_doc_mode = any(chunk.get("metadata", {}).get("multi_doc_mode", False) for chunk in retrieved_chunks)
         
         # Build the system instructions
         system_prompt = self._build_system_instructions(structured_mode)
         
         # Build the context section from retrieved chunks
-        context_section = self._build_context_section(retrieved_chunks, is_balanced_mode)
+        # Multi-doc mode uses the same grouped format as balanced mode
+        use_grouped_context = is_balanced_mode or is_multi_doc_mode
+        context_section = self._build_context_section(retrieved_chunks, use_grouped_context)
         
         # Build the user question section
-        question_section = self._build_question_section(user_question, structured_mode, is_balanced_mode)
+        question_section = self._build_question_section(user_question, structured_mode, is_balanced_mode, is_multi_doc_mode)
         
         # Combine all sections
         complete_prompt = f"{system_prompt}\n\n{context_section}\n\n{question_section}"
@@ -207,7 +210,7 @@ Your role is to be a faithful representative of the provided documents, not a ge
         
         return "\n".join(context_parts)
     
-    def _build_question_section(self, question: str, structured_mode: bool = False, is_balanced_mode: bool = False) -> str:
+    def _build_question_section(self, question: str, structured_mode: bool = False, is_balanced_mode: bool = False, is_multi_doc_mode: bool = False) -> str:
         """
         Build the user question section.
         
@@ -215,10 +218,30 @@ Your role is to be a faithful representative of the provided documents, not a ge
             question: The user's question
             structured_mode: Whether to enforce JSON output
             is_balanced_mode: Whether we are comparing multiple papers
+            is_multi_doc_mode: Whether we are in multi-document mode
             
         Returns:
             Formatted question string
         """
+        if is_multi_doc_mode:
+            return f"""USER QUESTION:
+{question}
+
+You are analyzing multiple scientific documents.
+
+For EACH document provided in the context:
+1. Identify the main topic.
+2. Identify the core contribution.
+3. Identify the research domain.
+
+Then:
+- Identify common themes across documents.
+- Identify major differences.
+- Explain how they are related.
+- Present the result in a structured comparison table.
+
+ANSWER:"""
+
         if is_balanced_mode:
             return f"""USER QUESTION:
 {question}

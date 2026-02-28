@@ -757,12 +757,24 @@ async def query_documents(
             logger.info(f"Retrieved {len(retrieved_chunks)} total chunks (Mode: {mode})")
             
             # Step 3: LLM Reranking (part of retrieval flow)
-            reranker = RerankingService()
-            reranked_chunks, rerank_succeeded = reranker.rerank(
-                question=request.question,
-                chunks=retrieved_chunks,
-                top_n=RERANK_RETURN,
+            # Skip reranking in MULTI_DOC_MODE — reranking would globally
+            # re-sort chunks and potentially drop entire documents.
+            is_multi_doc = any(
+                c.get("metadata", {}).get("multi_doc_mode", False)
+                for c in retrieved_chunks
             )
+            
+            if is_multi_doc:
+                logger.info("MULTI_DOC_MODE: skipping reranker to preserve per-document balance.")
+                reranked_chunks = retrieved_chunks
+                rerank_succeeded = False
+            else:
+                reranker = RerankingService()
+                reranked_chunks, rerank_succeeded = reranker.rerank(
+                    question=request.question,
+                    chunks=retrieved_chunks,
+                    top_n=RERANK_RETURN,
+                )
             retrieval_time = (time.perf_counter() - start_retrieval) * 1000
             if retrieval_time > SLOW_RETRIEVAL_THRESHOLD_MS:
                 logger.warning(

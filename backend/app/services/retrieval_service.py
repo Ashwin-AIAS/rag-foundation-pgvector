@@ -42,7 +42,62 @@ class RetrievalService:
             
         is_subquery = _kwargs.get("_is_balanced_subquery", False)
         
-        # --- Balanced Retrieval Mode ---
+        # --- MULTI-DOCUMENT MODE ---
+        # When multiple documents are selected and this is NOT a balanced
+        # sub-query, ensure every document contributes context by retrieving
+        # per-document chunks.  The existing "balanced comparison" path
+        # (compare/contrast keywords) does deeper section-level retrieval
+        # and is preserved below.
+        if not is_subquery and source_files and len(source_files) > 1:
+            lower_q = (user_question or "").lower()
+            is_comparison_query = any(
+                w in lower_q for w in ["compare", "contrast", "differentiate"]
+            )
+            
+            if not is_comparison_query:
+                logger.info(
+                    f"MULTI_DOC_MODE activated for {len(source_files)} documents."
+                )
+                all_chunks = []
+
+                # Structured retrieval queries — one chunk each per document
+                from app.services.embedding_service import EmbeddingService
+                emb_service = EmbeddingService()
+                structured_queries = [
+                    "main contribution",
+                    "methodology",
+                    "experimental results",
+                ]
+                query_embeddings = [emb_service.embed_query(q) for q in structured_queries]
+
+                for sf in source_files:
+                    sf_chunks = []
+                    for q_text, q_emb in zip(structured_queries, query_embeddings):
+                        sf_chunks.extend(self.retrieve(
+                            q_emb,
+                            top_k=1,
+                            source_files=[sf],
+                            user_question=q_text,
+                            _is_balanced_subquery=True,
+                        ))
+
+                    # Deduplicate and tag with multi_doc_mode
+                    seen_texts = set()
+                    for c in sf_chunks:
+                        if c["chunk_text"] not in seen_texts:
+                            seen_texts.add(c["chunk_text"])
+                            if not c.get("metadata"):
+                                c["metadata"] = {}
+                            c["metadata"]["multi_doc_mode"] = True
+                            all_chunks.append(c)
+
+                logger.info(
+                    f"MULTI_DOC_MODE collected {len(all_chunks)} chunks "
+                    f"across {len(source_files)} documents."
+                )
+                return all_chunks
+        
+        # --- Balanced Retrieval Mode (compare/contrast keywords) ---
         if not is_subquery and user_question and source_files and len(source_files) > 1:
             lower_q = user_question.lower()
             if any(w in lower_q for w in ["compare", "contrast", "differentiate"]):
