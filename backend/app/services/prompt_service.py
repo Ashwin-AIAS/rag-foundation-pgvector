@@ -227,18 +227,23 @@ Your role is to be a faithful representative of the provided documents, not a ge
             return f"""USER QUESTION:
 {question}
 
-You are analyzing multiple scientific documents.
+You are analyzing multiple scientific research papers.
 
-For EACH document provided in the context:
-1. Identify the main topic.
-2. Identify the core contribution.
-3. Identify the research domain.
+First, for each document separately:
+- Identify the core problem.
+- Identify the main methodological approach.
+- Identify the key contribution.
 
-Then:
-- Identify common themes across documents.
-- Identify major differences.
-- Explain how they are related.
-- Present the result in a structured comparison table.
+Then perform cross-document synthesis:
+
+1. Identify shared research themes.
+2. Identify differences in modeling approach.
+3. Identify differences in system assumptions.
+4. Identify whether the works are complementary or competing.
+5. Summarize in a structured comparison table.
+
+Avoid generic summaries.
+Reference each document explicitly.
 
 ANSWER:"""
 

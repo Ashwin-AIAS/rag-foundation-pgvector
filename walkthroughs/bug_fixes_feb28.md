@@ -42,3 +42,11 @@ Scanned the entire RAG project (30+ files) and identified **11 bugs**. All 11 ha
 - ✅ No `echo=True` hardcoded in database engine
 
 **Runtime verification** requires deploying to staging with PostgreSQL + pgvector + Gemini API key.
+
+## Production Fix (from Render logs)
+
+| #   | Bug                                          | File                   | What Changed                                                                                                                                                                                   |
+| --- | -------------------------------------------- | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 12  | Reranker JSON parse fails on **every** query | `reranking_service.py` | Parser now uses regex to extract JSON arrays from LLM output, with fallback to extracting individual integers from truncated responses like `[3, 5, 2,`. Previously reranking never succeeded. |
+
+> **Note:** To silence SQL echo in Render logs, set the environment variable `SQL_ECHO=false` in your Render dashboard (or leave it unset — the default is now `false`).
