@@ -129,17 +129,35 @@ def create_query_logs_table():
             conn.commit()
 
             # Ensure pgvector IVFFlat index exists for performance
-            conn.execute(sa_text("""
-                CREATE INDEX IF NOT EXISTS document_chunks_embedding_idx
-                ON document_chunks
-                USING ivfflat (embedding vector_cosine_ops)
-                WITH (lists = 100);
-            """))
-            conn.commit()
+            # IVFFlat requires rows for centroid computation — skip on empty/small tables
+            try:
+                table_exists = conn.execute(sa_text(
+                    "SELECT 1 FROM information_schema.tables WHERE table_name = 'document_chunks'"
+                )).fetchone()
+                chunk_count = 0
+                if table_exists:
+                    chunk_count = conn.execute(sa_text("SELECT COUNT(*) FROM document_chunks")).scalar() or 0
 
-            # Run ANALYZE to update planner statistics after index creation
-            conn.execute(sa_text("ANALYZE document_chunks;"))
-            conn.commit()
+                if chunk_count >= 100:
+                    conn.execute(sa_text("""
+                        CREATE INDEX IF NOT EXISTS document_chunks_embedding_idx
+                        ON document_chunks
+                        USING ivfflat (embedding vector_cosine_ops)
+                        WITH (lists = 100);
+                    """))
+                    conn.commit()
+
+                    # Run ANALYZE to update planner statistics after index creation
+                    conn.execute(sa_text("ANALYZE document_chunks;"))
+                    conn.commit()
+                else:
+                    logger.info(f"Skipping IVFFlat index — only {chunk_count} rows (need >= 100)")
+            except Exception as idx_err:
+                logger.warning(f"IVFFlat index creation skipped: {idx_err}")
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
 
             # Auto-migrate: add search_vector generated column if missing
             try:

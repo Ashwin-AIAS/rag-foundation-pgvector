@@ -16,7 +16,7 @@ class GraphExtractionService:
         """Initialize with a Neo4j driver instance."""
         self.driver = neo4j_driver
         genai.configure(api_key=settings.GEMINI_API_KEY)
-        self.model = genai.GenerativeModel(settings.GEMINI_MODEL)
+        self.model = genai.GenerativeModel(f"models/{settings.GEMINI_MODEL}")
         
     def extract_and_store(self, text: str, source_file: str, chunk_index: int) -> bool:
         """

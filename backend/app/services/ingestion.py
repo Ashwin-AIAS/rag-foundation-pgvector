@@ -266,7 +266,7 @@ class DocumentIngestionService:
     # ─────────────────────────────────────────────────────────────
     # MAIN INGESTION PIPELINE
     # ─────────────────────────────────────────────────────────────
-    async def ingest_document(self, file_path: str, filename: str) -> Dict[str, Any]:
+    def ingest_document(self, file_path: str, filename: str) -> Dict[str, Any]:
         """
         Full ingestion pipeline with per-stage diagnostics.
         Logs every failure to ingestion_errors table.
@@ -349,7 +349,7 @@ class DocumentIngestionService:
         texts = [chunk.page_content for chunk in chunks]
         start_embed = time.perf_counter()
         try:
-            logger.info(f"[EMBED START] {filename} — {len(texts)} chunks — waiting for semaphore slot...")
+            logger.info(f"[EMBED START] {filename} — {len(texts)} chunks — acquiring semaphore slot...")
             with _embedding_semaphore:
                 logger.info(f"[EMBED START] {filename} — semaphore acquired, calling API")
                 embeddings = self.embeddings.embed_documents(texts)
@@ -390,14 +390,8 @@ class DocumentIngestionService:
         }
 
     def ingest_document_sync(self, file_path: str, filename: str) -> Dict[str, Any]:
-        """Synchronous wrapper for background workers."""
-        import asyncio
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-        return loop.run_until_complete(self.ingest_document(file_path, filename))
+        """Alias kept for backward compatibility — ingest_document is now sync."""
+        return self.ingest_document(file_path, filename)
 
     # ─────────────────────────────────────────────────────────────
     # Phase 4: Per-chunk insert — skip bad chunks, commit per-doc

@@ -80,17 +80,24 @@ class GraphRetrievalService:
     def _execute_graph_search(tx, keywords: List[str], source_files: List[str] = None, limit: int = 5):
         """Execute cypher query to find multi-hop entity connections around query keywords."""
         
-        # Build keyword-matching WHERE clause for Cypher
-        # In Cypher, we use regex or CONTAINS
-        keyword_clauses = " OR ".join([f"source.id CONTAINS '{k}' OR target.id CONTAINS '{k}'" for k in keywords])
+        # Build parameterized keyword matching (prevents Cypher injection)
+        params = {"limit": limit}
+        keyword_conditions = []
+        for i, k in enumerate(keywords):
+            params[f"kw_{i}"] = k
+            keyword_conditions.append(
+                f"source.id CONTAINS $kw_{i} OR target.id CONTAINS $kw_{i}"
+            )
+        keyword_clause = " OR ".join(keyword_conditions)
         
         cypher_query = f"""
         MATCH (source:Entity)-[r:CONNECTED_TO]->(target:Entity)
-        WHERE {keyword_clauses}
+        WHERE {keyword_clause}
         """
         
         if source_files and len(source_files) > 0:
              cypher_query += " AND r.source_file IN $source_files "
+             params["source_files"] = source_files
              
         cypher_query += """
         RETURN 
@@ -102,5 +109,5 @@ class GraphRetrievalService:
         LIMIT $limit
         """
         
-        result = tx.run(cypher_query, source_files=source_files, limit=limit)
+        result = tx.run(cypher_query, **params)
         return [record.data() for record in result]

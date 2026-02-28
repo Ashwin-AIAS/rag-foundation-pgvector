@@ -206,7 +206,7 @@ export async function getDocuments() {
  * @returns {Promise<Object>} Deletion result
  */
 export async function deleteDocument(filename) {
-    const response = await fetch(`${API_BASE_URL}/documents/${filename}`, {
+    const response = await fetch(`${API_BASE_URL}/documents/${encodeURIComponent(filename)}`, {
         method: 'DELETE',
     });
 

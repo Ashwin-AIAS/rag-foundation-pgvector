@@ -106,9 +106,9 @@ class GeminiEmbeddingService:
                 time.sleep(0.5)
 
         if len(embeddings) != len(texts):
-            logger.error(
-                f"[EMBED COUNT MISMATCH] Expected {len(texts)} embeddings, "
-                f"got {len(embeddings)}. Some batches may have failed silently."
+            raise ValueError(
+                f"Embedding count mismatch: expected {len(texts)}, got {len(embeddings)}. "
+                f"Some batches may have failed silently."
             )
 
         return embeddings

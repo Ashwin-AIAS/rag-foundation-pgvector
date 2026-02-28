@@ -1,12 +1,13 @@
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, declarative_base
 from app.config import settings
+import os
 
 # Create database engine
 engine = create_engine(
     settings.database_url,
     pool_pre_ping=True,  # Verify connections before using them
-    echo=True  # Log SQL queries (disable in production)
+    echo=os.getenv("SQL_ECHO", "false").lower() == "true",
 )
 
 # Create session factory

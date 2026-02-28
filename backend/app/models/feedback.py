@@ -21,7 +21,7 @@ class FeedbackRequest(BaseModel):
         ge=0,
         description="Number of document chunks retrieved for this answer"
     )
-    timestamp: str = Field(
+    timestamp: datetime = Field(
         ..., 
         description="ISO 8601 timestamp when feedback was given"
     )
