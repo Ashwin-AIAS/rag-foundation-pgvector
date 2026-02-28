@@ -53,15 +53,26 @@ allowed_origins_str = os.getenv(
     "ALLOWED_ORIGINS",
     "https://rag-foundation-pgvector.vercel.app,https://rag-foundation-pgvector.onrender.com,http://localhost:5173,http://localhost:3000"
 )
-allowed_origins = [origin.strip() for origin in allowed_origins_str.split(",")]
+allowed_origins = [origin.strip().rstrip("/") for origin in allowed_origins_str.split(",") if origin.strip()]
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=allowed_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# If "*" is explicitly provided, we must disable allow_credentials
+if "*" in allowed_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+else:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=allowed_origins,
+        allow_origin_regex=os.getenv("ALLOWED_ORIGIN_REGEX", r"https://.*\.vercel\.app|https://.*\.onrender\.com"),
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 
 # ── Startup: ensure query_logs table exists ──────────────────
