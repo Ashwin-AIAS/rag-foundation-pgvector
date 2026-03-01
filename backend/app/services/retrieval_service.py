@@ -191,29 +191,43 @@ class RetrievalService:
         if use_keyword:
             params["query_text"] = user_question.strip()
             query = text(f"""
+                WITH vector_search AS (
+                    SELECT 
+                        id, 
+                        chunk_text,
+                        source_file,
+                        chunk_index,
+                        chunk_metadata,
+                        1 - (embedding <=> :query_embedding) AS vector_score,
+                        ROW_NUMBER() OVER (ORDER BY embedding <=> :query_embedding) AS vector_rank
+                    FROM document_chunks
+                    WHERE {where_sql}
+                    ORDER BY embedding <=> :query_embedding
+                    LIMIT :limit * 4
+                ),
+                keyword_search AS (
+                    SELECT 
+                        id,
+                        ts_rank(search_vector, plainto_tsquery('english', :query_text)) AS keyword_score,
+                        ROW_NUMBER() OVER (ORDER BY ts_rank(search_vector, plainto_tsquery('english', :query_text)) DESC) AS keyword_rank
+                    FROM document_chunks
+                    WHERE {where_sql}
+                      AND search_vector @@ plainto_tsquery('english', :query_text)
+                    ORDER BY keyword_score DESC
+                    LIMIT :limit * 4
+                )
                 SELECT 
-                    chunk_text,
-                    source_file,
-                    chunk_index,
-                    chunk_metadata,
-                    1 - (embedding <=> :query_embedding) AS vector_score,
-                    COALESCE(
-                        ts_rank(
-                            search_vector,
-                            plainto_tsquery('english', :query_text)
-                        ),
-                        0
-                    ) AS keyword_score,
-                    (0.7 * (1 - (embedding <=> :query_embedding)))
-                    + (0.3 * COALESCE(
-                        ts_rank(
-                            search_vector,
-                            plainto_tsquery('english', :query_text)
-                        ),
-                        0
-                    )) AS final_score
-                FROM document_chunks
-                WHERE {where_sql}
+                    COALESCE(v.chunk_text, k_full.chunk_text) AS chunk_text,
+                    COALESCE(v.source_file, k_full.source_file) AS source_file,
+                    COALESCE(v.chunk_index, k_full.chunk_index) AS chunk_index,
+                    COALESCE(v.chunk_metadata, k_full.chunk_metadata) AS chunk_metadata,
+                    COALESCE(v.vector_score, 0) AS vector_score,
+                    COALESCE(k.keyword_score, 0) AS keyword_score,
+                    COALESCE(1.0 / (60 + v.vector_rank), 0.0) + 
+                    COALESCE(1.0 / (60 + k.keyword_rank), 0.0) AS final_score
+                FROM vector_search v
+                FULL OUTER JOIN keyword_search k ON v.id = k.id
+                LEFT JOIN document_chunks k_full ON k.id = k_full.id
                 ORDER BY final_score DESC
                 LIMIT :limit
             """)
@@ -248,29 +262,43 @@ class RetrievalService:
                     logger.info("Fallback Mode: Active (On-the-fly tsvector calculation)")
                     # Reconstruct query using to_tsvector() instead of search_vector column
                     query = text(f"""
+                        WITH vector_search AS (
+                            SELECT 
+                                id, 
+                                chunk_text,
+                                source_file,
+                                chunk_index,
+                                chunk_metadata,
+                                1 - (embedding <=> :query_embedding) AS vector_score,
+                                ROW_NUMBER() OVER (ORDER BY embedding <=> :query_embedding) AS vector_rank
+                            FROM document_chunks
+                            WHERE {where_sql}
+                            ORDER BY embedding <=> :query_embedding
+                            LIMIT :limit * 4
+                        ),
+                        keyword_search AS (
+                            SELECT 
+                                id,
+                                ts_rank(to_tsvector('english', chunk_text), plainto_tsquery('english', :query_text)) AS keyword_score,
+                                ROW_NUMBER() OVER (ORDER BY ts_rank(to_tsvector('english', chunk_text), plainto_tsquery('english', :query_text)) DESC) AS keyword_rank
+                            FROM document_chunks
+                            WHERE {where_sql}
+                              AND to_tsvector('english', chunk_text) @@ plainto_tsquery('english', :query_text)
+                            ORDER BY keyword_score DESC
+                            LIMIT :limit * 4
+                        )
                         SELECT 
-                            chunk_text,
-                            source_file,
-                            chunk_index,
-                            chunk_metadata,
-                            1 - (embedding <=> :query_embedding) AS vector_score,
-                            COALESCE(
-                                ts_rank(
-                                    to_tsvector('english', chunk_text),
-                                    plainto_tsquery('english', :query_text)
-                                ),
-                                0
-                            ) AS keyword_score,
-                            (0.7 * (1 - (embedding <=> :query_embedding)))
-                            + (0.3 * COALESCE(
-                                ts_rank(
-                                    to_tsvector('english', chunk_text),
-                                    plainto_tsquery('english', :query_text)
-                                ),
-                                0
-                            )) AS final_score
-                        FROM document_chunks
-                        WHERE {where_sql}
+                            COALESCE(v.chunk_text, k_full.chunk_text) AS chunk_text,
+                            COALESCE(v.source_file, k_full.source_file) AS source_file,
+                            COALESCE(v.chunk_index, k_full.chunk_index) AS chunk_index,
+                            COALESCE(v.chunk_metadata, k_full.chunk_metadata) AS chunk_metadata,
+                            COALESCE(v.vector_score, 0) AS vector_score,
+                            COALESCE(k.keyword_score, 0) AS keyword_score,
+                            COALESCE(1.0 / (60 + v.vector_rank), 0.0) + 
+                            COALESCE(1.0 / (60 + k.keyword_rank), 0.0) AS final_score
+                        FROM vector_search v
+                        FULL OUTER JOIN keyword_search k ON v.id = k.id
+                        LEFT JOIN document_chunks k_full ON k.id = k_full.id
                         ORDER BY final_score DESC
                         LIMIT :limit
                     """)
@@ -285,29 +313,43 @@ class RetrievalService:
                              
                              # Reconstruct query using 'metadata' instead of 'chunk_metadata'
                              query = text(f"""
+                                WITH vector_search AS (
+                                    SELECT 
+                                        id, 
+                                        chunk_text,
+                                        source_file,
+                                        chunk_index,
+                                        metadata AS chunk_metadata,
+                                        1 - (embedding <=> :query_embedding) AS vector_score,
+                                        ROW_NUMBER() OVER (ORDER BY embedding <=> :query_embedding) AS vector_rank
+                                    FROM document_chunks
+                                    WHERE {where_sql}
+                                    ORDER BY embedding <=> :query_embedding
+                                    LIMIT :limit * 4
+                                ),
+                                keyword_search AS (
+                                    SELECT 
+                                        id,
+                                        ts_rank(to_tsvector('english', chunk_text), plainto_tsquery('english', :query_text)) AS keyword_score,
+                                        ROW_NUMBER() OVER (ORDER BY ts_rank(to_tsvector('english', chunk_text), plainto_tsquery('english', :query_text)) DESC) AS keyword_rank
+                                    FROM document_chunks
+                                    WHERE {where_sql}
+                                      AND to_tsvector('english', chunk_text) @@ plainto_tsquery('english', :query_text)
+                                    ORDER BY keyword_score DESC
+                                    LIMIT :limit * 4
+                                )
                                 SELECT 
-                                    chunk_text,
-                                    source_file,
-                                    chunk_index,
-                                    metadata AS chunk_metadata,
-                                    1 - (embedding <=> :query_embedding) AS vector_score,
-                                    COALESCE(
-                                        ts_rank(
-                                            to_tsvector('english', chunk_text),
-                                            plainto_tsquery('english', :query_text)
-                                        ),
-                                        0
-                                    ) AS keyword_score,
-                                    (0.7 * (1 - (embedding <=> :query_embedding)))
-                                    + (0.3 * COALESCE(
-                                        ts_rank(
-                                            to_tsvector('english', chunk_text),
-                                            plainto_tsquery('english', :query_text)
-                                        ),
-                                        0
-                                    )) AS final_score
-                                FROM document_chunks
-                                WHERE {where_sql}
+                                    COALESCE(v.chunk_text, k_full.chunk_text) AS chunk_text,
+                                    COALESCE(v.source_file, k_full.source_file) AS source_file,
+                                    COALESCE(v.chunk_index, k_full.chunk_index) AS chunk_index,
+                                    COALESCE(v.chunk_metadata, k_full.metadata) AS chunk_metadata,
+                                    COALESCE(v.vector_score, 0) AS vector_score,
+                                    COALESCE(k.keyword_score, 0) AS keyword_score,
+                                    COALESCE(1.0 / (60 + v.vector_rank), 0.0) + 
+                                    COALESCE(1.0 / (60 + k.keyword_rank), 0.0) AS final_score
+                                FROM vector_search v
+                                FULL OUTER JOIN keyword_search k ON v.id = k.id
+                                LEFT JOIN document_chunks k_full ON k.id = k_full.id
                                 ORDER BY final_score DESC
                                 LIMIT :limit
                             """)
