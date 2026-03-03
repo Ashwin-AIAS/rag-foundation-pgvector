@@ -745,14 +745,16 @@ async def query_documents(
                         settings.NEO4J_URI,
                         auth=(settings.NEO4J_USER, settings.NEO4J_PASSWORD)
                     )
-                    graph_service = GraphRetrievalService(driver)
-                    graph_chunks = graph_service.retrieve(
-                        user_question=request.question,
-                        source_files=request.selected_documents,
-                        top_k=5  # Keep graph context focused
-                    )
-                    retrieved_chunks.extend(graph_chunks)
-                    driver.close()
+                    try:
+                        graph_service = GraphRetrievalService(driver)
+                        graph_chunks = graph_service.retrieve(
+                            user_question=request.question,
+                            source_files=request.selected_documents,
+                            top_k=5  # Keep graph context focused
+                        )
+                        retrieved_chunks.extend(graph_chunks)
+                    finally:
+                        driver.close()
                 except Exception as e:
                     logger.warning(f"Graph retrieval failed: {e}")
                 graph_retrieval_ms = (time.perf_counter() - _t_graph) * 1000
