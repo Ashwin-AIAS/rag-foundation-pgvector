@@ -1,11 +1,15 @@
 import functools
 import logging
-import google.generativeai as genai
+import numpy as np
 from typing import List
 from app.config import settings
+from google import genai
+from google.genai import types
 
 logger = logging.getLogger(__name__)
 
+# Module level client to avoid re-initializing
+_client = None
 
 @functools.lru_cache(maxsize=256)
 def _cached_embed_query(model_name: str, api_key_hash: str, query: str) -> tuple:
@@ -14,27 +18,42 @@ def _cached_embed_query(model_name: str, api_key_hash: str, query: str) -> tuple
     Uses api_key_hash (not the key itself) as a cache discriminator.
     Returns a tuple (hashable) which is converted back to list by embed_query.
     """
-    result = genai.embed_content(
+    global _client
+    if _client is None:
+        _client = genai.Client(api_key=settings.GEMINI_API_KEY)
+        
+    result = _client.models.embed_content(
         model=model_name,
-        content=query,
-        task_type="retrieval_query",
-        output_dimensionality=768
+        contents=query,
+        config=types.EmbedContentConfig(
+            task_type="RETRIEVAL_QUERY",
+            output_dimensionality=768
+        )
     )
-    return tuple(result['embedding'])
+    vec = result.embeddings[0].values
+    
+    # normalize
+    arr = np.array(vec)
+    norm = np.linalg.norm(arr)
+    if norm > 0:
+        normed = arr / norm
+    else:
+        normed = arr
+        
+    return tuple(normed.tolist())
 
 
 class EmbeddingService:
     """
     Service for converting text queries into vector embeddings.
 
-    Uses Gemini's text-embedding-004 model (768 dimensions)
+    Uses Gemini's model (gemini-embedding-001 with 768 dimensions)
     to ensure query and document vectors are in the same embedding space.
     Results are LRU-cached (maxsize=256) to skip duplicate API calls.
     """
 
     def __init__(self):
-        """Initialize the Gemini embeddings client."""
-        genai.configure(api_key=settings.GEMINI_API_KEY)
+        """Initialize the Gemini embeddings client configurations."""
         self.model_name = settings.GEMINI_EMBEDDING_MODEL
         # Cache discriminator — avoids cross-key cache hits without exposing the key
         self._api_key_hash = str(hash(settings.GEMINI_API_KEY))

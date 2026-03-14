@@ -1,8 +1,9 @@
 import logging
 import json
-import google.generativeai as genai
 from typing import List, Dict, Any
 from app.config import settings
+from google import genai
+from google.genai import types
 
 logger = logging.getLogger(__name__)
 
@@ -12,23 +13,18 @@ class GraphExtractionService:
     and storing them in a Neo4j Graph Database.
     """
     
+    _client = None
+
     def __init__(self, neo4j_driver):
         """Initialize with a Neo4j driver instance."""
         self.driver = neo4j_driver
-        genai.configure(api_key=settings.GEMINI_API_KEY)
-        self.model = genai.GenerativeModel(f"models/{settings.GEMINI_MODEL}")
+        if GraphExtractionService._client is None:
+            GraphExtractionService._client = genai.Client(api_key=settings.GEMINI_API_KEY)
+        self.model_name = settings.GEMINI_MODEL
         
     def extract_and_store(self, text: str, source_file: str, chunk_index: int) -> bool:
         """
         Extract entities/relationships from a text chunk and store them in Neo4j.
-        
-        Args:
-            text: The text chunk to analyze
-            source_file: The filename this chunk belongs to
-            chunk_index: The index of the chunk in the document
-            
-        Returns:
-            bool: True if successful, False otherwise.
         """
         try:
             # 1. Ask Gemini to extract entities and relationships
@@ -71,17 +67,25 @@ class GraphExtractionService:
         """
         
         try:
-            response = self.model.generate_content(prompt)
-            # Clean up the response to ensure it's valid JSON (remove markdown formatting if present)
+            response = self._client.models.generate_content(
+                model=self.model_name,
+                contents=prompt
+            )
             response_text = response.text.strip()
+            
+            # Clean up the response to ensure it's valid JSON
             if response_text.startswith("```json"):
                 response_text = response_text[7:]
-            if response_text.endswith("```"):
-                response_text = response_text[:-3]
-                
-            return json.loads(response_text)
+                if response_text.endswith("```"):
+                    response_text = response_text[:-3]
+            elif response_text.startswith("```"):
+                response_text = response_text[3:]
+                if response_text.endswith("```"):
+                    response_text = response_text[:-3]
+            
+            return json.loads(response_text.strip())
         except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse JSON from Gemini: {e}\nRaw output: {response.text}")
+            logger.error(f"Failed to parse JSON from Gemini: {e}\nRaw output: {response.text if 'response' in locals() else 'N/A'}")
             return {}
         except Exception as e:
             logger.error(f"Error during Gemini generation: {e}")
@@ -99,8 +103,6 @@ class GraphExtractionService:
         # 2. Merge Entities
         entities = graph_data.get("entities", [])
         for entity in entities:
-            # Dynamic labels in Cypher require apoc or building the string, 
-            # we'll use a generic 'Entity' label and store the specific type as a property
             tx.run("""
                 MERGE (e:Entity {id: $id})
                 SET e.type = $type, e.description = $description
@@ -116,8 +118,6 @@ class GraphExtractionService:
         # 3. Merge Relationships
         relationships = graph_data.get("relationships", [])
         for rel in relationships:
-            # We use a generic CONNECTED_TO relationship because Cypher doesn't allow 
-            # dynamic relationship types passed as parameters in standard MERGE easily
             tx.run("""
                 MATCH (source:Entity {id: $source_id})
                 MATCH (target:Entity {id: $target_id})

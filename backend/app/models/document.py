@@ -39,7 +39,7 @@ class DocumentChunk(Base):
     source_file = Column(String(255), nullable=False, index=True)
     chunk_index = Column(Integer, nullable=False)
     chunk_text = Column(Text, nullable=False)
-    embedding = Column(Vector(768))  # Gemini text-embedding-004 produces 768-dimensional embeddings
+    embedding = Column(Vector(768))  # Gemini gemini-embedding-001 produces 768-dimensional embeddings
     chunk_metadata = Column(JSONB)  # Renamed from 'metadata' to avoid SQLAlchemy reserved keyword
     
     # Computed column for hybrid search (matches DB migration)

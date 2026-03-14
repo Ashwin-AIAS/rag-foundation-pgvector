@@ -1,8 +1,11 @@
-import google.generativeai as genai
 import logging
 import time
 from typing import List
 from app.config import settings
+
+from google import genai
+from google.genai import types
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -21,15 +24,25 @@ def _classify_embedding_error(e: Exception) -> str:
     return "UNKNOWN"
 
 
+def _normalize(vec: list[float]) -> list[float]:
+    arr = np.array(vec)
+    norm = np.linalg.norm(arr)
+    return (arr / norm).tolist() if norm > 0 else vec
+
+
 class GeminiEmbeddingService:
     """
     Service for generating embeddings using Google's Gemini API.
-    Uses text-embedding-004 (768-dimensional embeddings).
+    Uses new google.genai SDK.
     Retries up to 2 extra times on rate-limit, timeout, or token-size errors.
     """
 
+    # Module-level / class-attribute client to avoid re-initializing HTTP client
+    _client = None
+
     def __init__(self):
-        genai.configure(api_key=settings.GEMINI_API_KEY)
+        if GeminiEmbeddingService._client is None:
+            GeminiEmbeddingService._client = genai.Client(api_key=settings.GEMINI_API_KEY)
         self.model_name = settings.GEMINI_EMBEDDING_MODEL
 
     def embed_documents(self, texts: List[str], batch_size: int = 50) -> List[List[float]]:
@@ -41,7 +54,7 @@ class GeminiEmbeddingService:
         Raises on auth errors or exhausted retries.
         """
         embeddings = []
-        MAX_RETRIES = 3  # 1 attempt + 2 retries
+        MAX_RETRIES = 5  # Increased for low quota
 
         for i in range(0, len(texts), batch_size):
             batch = texts[i:i + batch_size]
@@ -50,30 +63,25 @@ class GeminiEmbeddingService:
             last_error = None
             for attempt in range(MAX_RETRIES):
                 try:
-                    result = genai.embed_content(
+                    result = self._client.models.embed_content(
                         model=self.model_name,
-                        content=batch,
-                        task_type="retrieval_document",
-                        output_dimensionality=768
+                        contents=batch,
+                        config=types.EmbedContentConfig(
+                            task_type="RETRIEVAL_DOCUMENT",
+                            output_dimensionality=768
+                        )
                     )
 
-                    if 'embedding' in result:
-                        batch_embeddings = result['embedding']
-                        if isinstance(batch_embeddings, list) and len(batch_embeddings) > 0:
-                            if isinstance(batch_embeddings[0], float):
-                                # Single embedding returned unexpectedly — wrap it
-                                embeddings.append(batch_embeddings)
-                            else:
-                                embeddings.extend(batch_embeddings)
-                            logger.info(
-                                f"[EMBED BATCH {batch_num}] OK — {len(batch)} texts embedded "
-                                f"(attempt {attempt+1}/{MAX_RETRIES})"
-                            )
-                            break  # success
-                        else:
-                            raise ValueError(f"Empty embedding list returned for batch {batch_num}")
+                    if result.embeddings:
+                        batch_embeddings = [_normalize(e.values) for e in result.embeddings]
+                        embeddings.extend(batch_embeddings)
+                        logger.info(
+                            f"[EMBED BATCH {batch_num}] OK — {len(batch)} texts embedded "
+                            f"(attempt {attempt+1}/{MAX_RETRIES})"
+                        )
+                        break  # success
                     else:
-                        raise ValueError(f"'embedding' key missing in API result: {result}")
+                        raise ValueError(f"Empty embedding list returned for batch {batch_num}")
 
                 except Exception as e:
                     last_error = e
@@ -86,7 +94,7 @@ class GeminiEmbeddingService:
                     )
 
                     if retryable and attempt < MAX_RETRIES - 1:
-                        delay = 5 * (2 ** attempt)  # 5s, 10s
+                        delay = 10 * (2 ** attempt)  # 10s, 20s, 40s, 80s
                         logger.warning(
                             f"[EMBED RETRY] Batch {batch_num} ({category}) — "
                             f"retrying in {delay}s (attempt {attempt+2}/{MAX_RETRIES})..."
@@ -120,13 +128,18 @@ class GeminiEmbeddingService:
 
         for attempt in range(MAX_RETRIES):
             try:
-                result = genai.embed_content(
+                result = self._client.models.embed_content(
                     model=self.model_name,
-                    content=text,
-                    task_type="retrieval_query",
-                    output_dimensionality=768
+                    contents=text,
+                    config=types.EmbedContentConfig(
+                        task_type="RETRIEVAL_QUERY",
+                        output_dimensionality=768
+                    )
                 )
-                return result['embedding']
+                if result.embeddings:
+                    vec = result.embeddings[0].values
+                    return _normalize(vec)
+                raise ValueError("No embeddings returned")
             except Exception as e:
                 last_error = e
                 category = _classify_embedding_error(e)

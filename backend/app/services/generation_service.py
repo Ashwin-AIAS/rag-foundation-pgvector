@@ -1,13 +1,13 @@
 import logging
 import time
-import google.generativeai as genai
 from app.config import settings
+from google import genai
+from google.genai import types
 
 logger = logging.getLogger(__name__)
 
 MAX_RETRIES = 3
 INITIAL_RETRY_DELAY = 5  # seconds
-
 
 class GenerationService:
     """
@@ -17,12 +17,14 @@ class GenerationService:
     Includes automatic retry with exponential backoff for rate limits.
     """
     
+    _client = None
+
     def __init__(self):
         """Initialize the Gemini client."""
-        genai.configure(api_key=settings.GEMINI_API_KEY)
-        # Generation models need 'models/' prefix
-        model_name = f"models/{settings.GEMINI_MODEL}"
-        self.model = genai.GenerativeModel(model_name)
+        if GenerationService._client is None:
+            GenerationService._client = genai.Client(api_key=settings.GEMINI_API_KEY)
+        
+        self.model_name = settings.GEMINI_MODEL
         self.temperature = 0.2 # Structured but stable
         self.max_tokens = settings.GENERATION_MAX_TOKENS
     
@@ -30,7 +32,7 @@ class GenerationService:
         """
         Generate an answer using the Gemini API with retry logic.
         """
-        generation_config = genai.types.GenerationConfig(
+        config = types.GenerateContentConfig(
             temperature=self.temperature,
             max_output_tokens=self.max_tokens
         )
@@ -38,16 +40,16 @@ class GenerationService:
         last_error = None
         for attempt in range(MAX_RETRIES):
             try:
-                response = self.model.generate_content(
-                    prompt,
-                    generation_config=generation_config
+                response = self._client.models.generate_content(
+                    model=self.model_name,
+                    contents=prompt,
+                    config=config
                 )
                 
-                logging.debug(f"Generated answer length: {len(response.text)} chars")
-                if response.prompt_feedback:
-                    logging.debug(f"Prompt feedback: {response.prompt_feedback}")
+                text = response.text
+                logging.debug(f"Generated answer length: {len(text)} chars")
                 
-                return response.text.strip()
+                return text.strip()
                 
             except Exception as e:
                 last_error = e
@@ -67,7 +69,7 @@ class GenerationService:
         
         Retries on rate-limit errors with exponential backoff.
         """
-        generation_config = genai.types.GenerationConfig(
+        config = types.GenerateContentConfig(
             temperature=self.temperature,
             max_output_tokens=self.max_tokens
         )
@@ -75,28 +77,23 @@ class GenerationService:
         last_error = None
         for attempt in range(MAX_RETRIES):
             try:
-                response = self.model.generate_content(
-                    prompt,
-                    generation_config=generation_config,
-                    stream=True
+                response = self._client.models.generate_content_stream(
+                    model=self.model_name,
+                    contents=prompt,
+                    config=config
                 )
                 
                 token_count = 0
                 for chunk in response:
                     try:
-                        if hasattr(chunk, "text") and chunk.text:
+                        if chunk.text:
                             token_count += 1
                             yield chunk.text
-                    except ValueError as ve:
-                        logger.warning(f"Chunk blocked by safety filter: {ve}")
+                    except Exception as ve:
+                        logger.warning(f"Chunk error: {ve}")
                         continue
                 
                 logger.info(f"Stream completed: {token_count} tokens yielded")
-                
-                if hasattr(response, 'prompt_feedback') and response.prompt_feedback:
-                    logger.info(f"Prompt feedback: {response.prompt_feedback}")
-                
-                # Stream succeeded — exit retry loop
                 return
                     
             except Exception as e:
