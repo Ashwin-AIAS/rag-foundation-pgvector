@@ -22,7 +22,7 @@ export default function FileUpload({ onUploadSuccess }) {
             id: Date.now() + i,
             x: Math.random() * 100,
             angle: (i / 12) * 360,
-            color: ['#00d4ff','#a855f7','#39FF14'][i % 3],
+            color: ['rgba(245,245,247,0.9)','rgba(245,245,247,0.5)','rgba(245,245,247,0.7)'][i % 3],
         }));
         setParticles(newParticles);
         setTimeout(() => setParticles([]), 1000);

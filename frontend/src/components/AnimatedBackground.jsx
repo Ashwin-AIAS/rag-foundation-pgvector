@@ -14,7 +14,11 @@ export default function AnimatedBackground() {
 
     const PARTICLE_COUNT = 70;
     const CONNECT_DIST = 130;
-    const COLORS = ['#00d4ff', '#a855f7', '#39FF14'];
+    const COLORS = [
+      'rgba(245,245,247,0.7)',
+      'rgba(245,245,247,0.4)',
+      'rgba(245,245,247,0.55)',
+    ];
 
     const particles = Array.from({ length: PARTICLE_COUNT }, () => ({
       x: Math.random() * w,
@@ -34,13 +38,6 @@ export default function AnimatedBackground() {
       h = canvas.height = window.innerHeight;
     };
     window.addEventListener('resize', onResize);
-
-    function hexToRgb(hex) {
-      const r = parseInt(hex.slice(1,3),16);
-      const g = parseInt(hex.slice(3,5),16);
-      const b = parseInt(hex.slice(5,7),16);
-      return `${r},${g},${b}`;
-    }
 
     function draw() {
       ctx.clearRect(0, 0, w, h);
@@ -84,7 +81,7 @@ export default function AnimatedBackground() {
           if (ed < CONNECT_DIST) {
             const alpha = (1 - ed / CONNECT_DIST) * 0.25;
             ctx.beginPath();
-            ctx.strokeStyle = `rgba(${hexToRgb(p.color)},${alpha})`;
+            ctx.strokeStyle = `rgba(245,245,247,${alpha * 0.6})`;
             ctx.lineWidth = 0.6;
             ctx.moveTo(p.x, p.y);
             ctx.lineTo(q.x, q.y);
@@ -95,13 +92,13 @@ export default function AnimatedBackground() {
         // Draw node
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(${hexToRgb(p.color)},0.75)`;
+        ctx.fillStyle = p.color;
         ctx.fill();
 
         // Glow
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.r + 2, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(${hexToRgb(p.color)},0.12)`;
+        ctx.fillStyle = p.color.replace(/[\d.]+\)$/, '0.08)');
         ctx.fill();
       }
 
@@ -127,7 +124,7 @@ export default function AnimatedBackground() {
         height: '100%',
         pointerEvents: 'none',
         zIndex: -1,
-        opacity: 0.7,
+        opacity: 0.35,
       }}
     />
   );

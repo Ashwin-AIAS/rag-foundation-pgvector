@@ -60,10 +60,10 @@ export default function CyberCursor() {
           width: 8,
           height: 8,
           borderRadius: '50%',
-          background: '#00d4ff',
+          background: '#f5f5f7',
           pointerEvents: 'none',
           zIndex: 99999,
-          boxShadow: '0 0 8px #00d4ff',
+          boxShadow: 'none',
           translateX: '-50%',
           translateY: '-50%',
         }}
@@ -80,12 +80,12 @@ export default function CyberCursor() {
           width: 32,
           height: 32,
           borderRadius: '50%',
-          border: '1.5px solid rgba(0,212,255,0.5)',
+          border: '1px solid rgba(245,245,247,0.35)',
           pointerEvents: 'none',
           zIndex: 99998,
           translateX: '-50%',
           translateY: '-50%',
-          background: isHovering.current ? 'rgba(0,212,255,0.1)' : 'transparent',
+          background: isHovering.current ? 'rgba(245,245,247,0.06)' : 'transparent',
         }}
       />
     </>

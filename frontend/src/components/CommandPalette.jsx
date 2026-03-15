@@ -61,9 +61,9 @@ export default function CommandPalette({ isOpen, onClose, conversationHistory = 
   }, [handleKey]);
 
   const typeIcon = (type) => {
-    if (type === 'query')  return <span style={{ color: '#00d4ff', fontSize: 12 }}>›</span>;
-    if (type === 'doc')    return <span style={{ color: '#a855f7', fontSize: 12 }}>◈</span>;
-    if (type === 'action') return <span style={{ color: '#39FF14', fontSize: 12 }}>⚡</span>;
+    if (type === 'query')  return <span style={{ color: '#f5f5f7', fontSize: 12 }}>›</span>;
+    if (type === 'doc')    return <span style={{ color: 'rgba(245,245,247,0.55)', fontSize: 12 }}>◈</span>;
+    if (type === 'action') return <span style={{ color: 'rgba(245,245,247,0.4)', fontSize: 12 }}>⚡</span>;
     return null;
   };
 
@@ -91,14 +91,14 @@ export default function CommandPalette({ isOpen, onClose, conversationHistory = 
             style={{
               width: '100%', maxWidth: 560,
               background: 'rgba(10,15,28,0.95)',
-              border: '1px solid rgba(0,212,255,0.3)',
+              border: '1px solid rgba(245,245,247,0.3)',
               borderRadius: 16, overflow: 'hidden',
-              boxShadow: '0 0 60px rgba(0,212,255,0.15), 0 25px 50px rgba(0,0,0,0.6)',
+              boxShadow: '0 0 0 0.5px rgba(255,255,255,0.12), 0 25px 60px rgba(0,0,0,0.8)',
             }}
           >
             {/* Search input */}
-            <div style={{ display: 'flex', alignItems: 'center', padding: '14px 16px', borderBottom: '1px solid rgba(0,212,255,0.1)', gap: 10 }}>
-              <span style={{ color: '#00d4ff', fontFamily: 'JetBrains Mono', fontSize: 16 }}>⌘</span>
+            <div style={{ display: 'flex', alignItems: 'center', padding: '14px 16px', borderBottom: '1px solid rgba(245,245,247,0.1)', gap: 10 }}>
+              <span style={{ color: 'rgba(245,245,247,0.35)', fontFamily: 'JetBrains Mono', fontSize: 16 }}>⌘</span>
               <input
                 ref={inputRef}
                 value={query}
@@ -128,8 +128,8 @@ export default function CommandPalette({ isOpen, onClose, conversationHistory = 
                   style={{
                     display: 'flex', alignItems: 'center', gap: 12,
                     padding: '10px 16px', cursor: 'pointer',
-                    background: i === activeIndex ? 'rgba(0,212,255,0.08)' : 'transparent',
-                    borderLeft: i === activeIndex ? '2px solid #00d4ff' : '2px solid transparent',
+                    background: i === activeIndex ? 'rgba(255,255,255,0.05)' : 'transparent',
+                    borderLeft: i === activeIndex ? '2px solid rgba(245,245,247,0.4)' : '2px solid transparent',
                     transition: 'background 0.1s',
                   }}
                 >
@@ -143,7 +143,7 @@ export default function CommandPalette({ isOpen, onClose, conversationHistory = 
             </div>
 
             {/* Footer */}
-            <div style={{ padding: '8px 16px', borderTop: '1px solid rgba(0,212,255,0.08)', display: 'flex', gap: 16 }}>
+            <div style={{ padding: '8px 16px', borderTop: '1px solid rgba(245,245,247,0.08)', display: 'flex', gap: 16 }}>
               {[['↑↓','navigate'],['↵','select'],['esc','close']].map(([key, label]) => (
                 <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                   <kbd style={{ fontSize: 10, color: 'rgba(230,241,255,0.4)', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 4, padding: '1px 5px', fontFamily: 'JetBrains Mono' }}>{key}</kbd>

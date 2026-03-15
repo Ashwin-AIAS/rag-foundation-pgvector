@@ -22,7 +22,7 @@ function MiniBarChart({ data, labelKey, valueKey, color = '#4fc3f7' }) {
                             initial={{ width: 0 }}
                             animate={{ width: `${Math.round((d[valueKey] / maxVal) * 100)}%` }}
                             transition={{ duration: 0.8, delay: 0.3 + i * 0.08, ease: 'easeOut' }}
-                            style={{ background: ['#00d4ff', '#a855f7', '#39FF14', '#fbbf24'][i % 4] }}
+                            style={{ background: ['rgba(245,245,247,0.9)', 'rgba(245,245,247,0.65)', 'rgba(245,245,247,0.5)', 'rgba(245,245,247,0.35)'][i % 4] }}
                         />
                     </div>
                     <span className="bar-value">{d[valueKey]}</span>
@@ -92,7 +92,7 @@ export default function AdminAnalytics() {
                                       transition={{ type: 'spring', delay: 0.2 + index * 0.1, stiffness: 400, damping: 20 }}
                                       className="kpi-value"
                                       style={{
-                                        background: 'linear-gradient(135deg, #00d4ff, #a855f7)',
+                                        background: 'linear-gradient(135deg, rgba(245,245,247,0.8), rgba(245,245,247,0.4))',
                                         WebkitBackgroundClip: 'text',
                                         WebkitTextFillColor: 'transparent',
                                       }}
