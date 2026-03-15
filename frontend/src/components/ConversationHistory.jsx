@@ -15,10 +15,10 @@ import { motion, AnimatePresence } from 'framer-motion';
  */
 export default function ConversationHistory({ history, onClearHistory }) {
     return (
-        <div className="flex flex-col h-full bg-cyber-darker/30 backdrop-blur-sm border-l border-cyber-primary/10">
-            <div className="flex items-center justify-between p-4 border-b border-cyber-primary/10 bg-cyber-darker/80">
-                <h3 className="text-sm font-bold text-cyber-primary uppercase tracking-wider flex items-center gap-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <div className="flex flex-col h-full" style={{ background: '#161617' }}>
+            <div className="flex items-center justify-between p-4" style={{ borderBottom: '0.5px solid rgba(255,255,255,0.08)' }}>
+                <h3 className="apple-caption flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="rgba(245,245,247,0.35)">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                     LOGS ({history.length})
@@ -27,10 +27,10 @@ export default function ConversationHistory({ history, onClearHistory }) {
                 {history.length > 0 && (
                     <button
                         onClick={onClearHistory}
-                        className="text-xs text-cyber-secondary hover:text-white transition-colors uppercase tracking-widest border border-cyber-secondary/30 hover:bg-cyber-secondary/20 px-2 py-1 rounded"
-                        title="Purge Logs"
+                        className="apple-btn apple-btn-ghost px-3 py-1 text-[11px]" style={{ borderRadius: '7px' }}
+                        title="Clear Logs"
                     >
-                        Purge
+                        Clear
                     </button>
                 )}
             </div>
@@ -41,20 +41,20 @@ export default function ConversationHistory({ history, onClearHistory }) {
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
                         transition={{ delay: 0.3, duration: 0.4 }}
-                        className="flex flex-col items-center justify-center h-48 text-cyber-text/30"
+                        className="flex flex-col items-center justify-center h-48 gap-2"
                     >
                         <motion.div
                             animate={{ opacity: [0.3, 0.7, 0.3] }}
                             transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
                         >
                             <svg width="32" height="32" viewBox="0 0 32 32" fill="none" className="mb-3 opacity-40">
-                                <circle cx="16" cy="16" r="12" stroke="#00d4ff" strokeWidth="1" strokeDasharray="4 4"/>
-                                <circle cx="16" cy="16" r="6" stroke="#00d4ff" strokeWidth="1" opacity="0.5"/>
-                                <circle cx="16" cy="16" r="2" fill="#00d4ff" opacity="0.6"/>
+                                <circle cx="16" cy="16" r="12" stroke="#f5f5f7" strokeWidth="1" strokeDasharray="4 4"/>
+                                <circle cx="16" cy="16" r="6" stroke="#f5f5f7" strokeWidth="1" opacity="0.5"/>
+                                <circle cx="16" cy="16" r="2" fill="#f5f5f7" opacity="0.6"/>
                             </svg>
                         </motion.div>
-                        <p className="text-xs uppercase tracking-widest text-center font-display">No Data Streams Active</p>
-                        <p className="text-[10px] opacity-50 mt-1 font-mono">Execute query to initialize logs</p>
+                        <p className="apple-caption">No queries yet</p>
+                        <p className="apple-caption" style={{ opacity: 0.4 }}>Ask a question to see your history</p>
                     </motion.div>
                 ) : (
                     <div className="space-y-3">
@@ -68,7 +68,7 @@ export default function ConversationHistory({ history, onClearHistory }) {
             </div>
 
             {history.length >= 50 && (
-                <div className="text-[10px] text-cyber-secondary/70 text-center py-2 bg-cyber-secondary/5 border-t border-cyber-secondary/10">
+                <div className="apple-caption text-center py-2" style={{ borderTop: '0.5px solid rgba(255,255,255,0.08)', opacity: 0.5 }}>
                     Buffer Limit Reached: Auto-archiving oldest entries
                 </div>
             )}

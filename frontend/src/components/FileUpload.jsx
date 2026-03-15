@@ -146,7 +146,7 @@ export default function FileUpload({ onUploadSuccess }) {
     const statusColor = (status) => {
         if (status === 'COMPLETE') return 'text-green-400';
         if (status === 'FAILED') return 'text-red-400';
-        return 'text-cyber-primary';
+        return 'text-[#f5f5f7]';
     };
 
     return (
@@ -154,13 +154,9 @@ export default function FileUpload({ onUploadSuccess }) {
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
-            animate={{
-                borderColor: isDragging ? 'rgba(0,212,255,0.8)' : 'rgba(0,212,255,0.2)',
-                boxShadow: isDragging ? '0 0 30px rgba(0,212,255,0.3), inset 0 0 30px rgba(0,212,255,0.05)' : '0 0 0px transparent',
-                scale: isDragging ? 1.02 : 1,
-            }}
+            animate={{ scale: isDragging ? 1.02 : 1 }}
             transition={{ duration: 0.2 }}
-            className="relative w-full"
+            className="w-full"
         >
             <AnimatePresence>
                 {particles.map(p => (
@@ -182,14 +178,7 @@ export default function FileUpload({ onUploadSuccess }) {
                 ))}
             </AnimatePresence>
             <div
-                className={`
-          relative border-2 border-dashed rounded-xl p-8 text-center transition-all duration-300
-          ${isDragging
-                        ? 'border-cyber-primary bg-cyber-primary/10 shadow-[0_0_20px_rgba(0,212,255,0.2)]'
-                        : 'border-cyber-primary/30 hover:border-cyber-primary/60 bg-cyber-darker/50'
-                    }
-          ${isUploading ? 'opacity-50 pointer-events-none' : ''}
-        `}
+                className={`apple-upload-zone p-8 text-center ${isDragging ? 'drag-over' : ''} ${isUploading ? 'opacity-40 pointer-events-none' : ''}`}
             >
                 <input
                     type="file"
@@ -205,50 +194,47 @@ export default function FileUpload({ onUploadSuccess }) {
                     htmlFor="file-upload"
                     className="flex flex-col items-center justify-center cursor-pointer h-full"
                 >
-                    <div className={`
-            w-16 h-16 mb-4 rounded-full flex items-center justify-center transition-all duration-300
-            ${isDragging ? 'bg-cyber-primary/20 text-cyber-primary' : 'bg-cyber-darker text-cyber-primary/50 group-hover:text-cyber-primary'}
-          `}>
+                    <div className="w-14 h-14 mb-4 rounded-2xl flex items-center justify-center transition-all duration-200" style={{ background: 'rgba(255,255,255,0.06)', color: 'rgba(245,245,247,0.5)' }}>
                         {isUploading ? (
-                            <div className="w-8 h-8 border-2 border-cyber-primary border-t-transparent rounded-full animate-spin"></div>
+                            <div className="w-7 h-7 rounded-full animate-spin" style={{ border: '1.5px solid rgba(245,245,247,0.1)', borderTopColor: '#f5f5f7' }}></div>
                         ) : (
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" style={{ color: 'rgba(245,245,247,0.45)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                             </svg>
                         )}
                     </div>
 
-                    <p className="text-lg font-medium text-cyber-text mb-2">
-                        {isUploading ? 'UPLOADING...' : 'INITIATE DATA UPLOAD'}
+                    <p className="text-[15px] font-semibold mb-1 tracking-[-0.01em]" style={{ color: '#f5f5f7' }}>
+                        {isUploading ? 'Uploading...' : 'Drop files to upload'}
                     </p>
-                    <p className="text-xs text-cyber-text/50 uppercase tracking-widest">
-                        Drag & Drop PDF, DOCX, TXT, Excel
+                    <p className="apple-caption">
+                        PDF, DOCX, TXT, CSV, Excel
                     </p>
                 </label>
             </div>
 
             {isUploading && (
-                <div className="mt-4 px-2">
-                    <div className="flex justify-between text-xs text-cyber-primary mb-1">
-                        <span>UPLOADING</span>
-                        <span>{uploadProgress}%</span>
-                    </div>
-                    <div className="w-full h-1 bg-cyber-darker rounded-full overflow-hidden border border-cyber-primary/20">
-                        <motion.div
-                            className="h-full bg-cyber-primary shadow-[0_0_10px_rgba(0,212,255,0.5)]"
-                            initial={{ width: 0 }}
-                            animate={{ width: `${uploadProgress}%` }}
-                            transition={{ duration: 0.1 }}
-                        />
-                    </div>
-                </div>
+               <div className="mt-4 px-1">
+                 <div className="flex justify-between apple-caption mb-2">
+                   <span>Uploading</span>
+                   <span>{uploadProgress}%</span>
+                 </div>
+                 <div className="apple-progress-track">
+                   <motion.div
+                     className="h-full rounded-full" style={{ background: '#f5f5f7' }}
+                     initial={{ width: 0 }}
+                     animate={{ width: `${uploadProgress}%` }}
+                     transition={{ duration: 0.15 }}
+                   />
+                 </div>
+               </div>
             )}
 
             {/* Per-job status list */}
             {jobStatuses.length > 0 && (
                 <div className="mt-3 space-y-1">
                     {jobStatuses.map(j => (
-                        <div key={j.job_id} className={`flex items-center gap-2 text-xs px-2 py-1 rounded ${statusColor(j.status)}`}>
+                        <div key={j.job_id} className="flex items-center gap-2 text-[11px] px-2 py-1 rounded-lg" style={{ color: 'rgba(245,245,247,0.6)', background: 'rgba(255,255,255,0.03)' }}>
                             <span className={j.status === 'PROCESSING' ? 'animate-spin inline-block' : ''}>
                                 {statusIcon(j.status)}
                             </span>
@@ -263,13 +249,12 @@ export default function FileUpload({ onUploadSuccess }) {
                 <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className={`
-            mt-4 p-3 rounded-lg border text-sm flex items-center gap-2
-            ${message.type === 'success'
-                            ? 'bg-green-500/10 border-green-500/30 text-green-400'
-                            : 'bg-red-500/10 border-red-500/30 text-red-400'
-                        }
-          `}
+                    className="mt-4 p-3 rounded-xl border text-[13px] flex items-center gap-2"
+                    style={{
+                        background: 'rgba(255,255,255,0.04)',
+                        border: '0.5px solid rgba(255,255,255,0.12)',
+                        color: message.type === 'success' ? 'rgba(245,245,247,0.8)' : 'rgba(245,245,247,0.5)'
+                    }}
                 >
                     <span>{message.type === 'success' ? '✓' : '⚠'}</span>
                     {message.text}

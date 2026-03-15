@@ -7,60 +7,68 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['"JetBrains Mono"', 'monospace'],
-        display: ['"Orbitron"', 'sans-serif'],
-        mono: ['"JetBrains Mono"', 'monospace'],
+        sans: ['-apple-system', 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', 'Arial', 'sans-serif'],
+        display: ['-apple-system', 'SF Pro Display', 'Helvetica Neue', 'sans-serif'],
+        mono: ['SF Mono', 'ui-monospace', 'Menlo', 'Monaco', 'monospace'],
       },
       colors: {
-        'cyber-primary':  '#00d4ff',
-        'cyber-secondary': '#a855f7',
-        'cyber-darker':   '#05070d',
-        'cyber-dark':     '#0a0f1c',
-        'cyber-text':     'rgba(255,255,255,0.87)',
-        // New accent tokens
-        'neon-green':     '#39FF14',
-        'plasma':         '#a855f7',
-        'hot-amber':      '#fbbf24',
-        'cyber-red':      '#ef4444',
-        // Glass surface tokens
-        'glass-surface':  'rgba(10,15,28,0.60)',
-        'glass-border':   'rgba(0,212,255,0.18)',
+        apple: {
+          black:    '#000000',
+          s1:       '#161617',
+          s2:       '#1d1d1f',
+          s3:       '#2d2d2f',
+          s4:       '#3a3a3c',
+          white:    '#f5f5f7',
+          mid:      'rgba(245,245,247,0.6)',
+          muted:    'rgba(245,245,247,0.35)',
+          faint:    'rgba(245,245,247,0.12)',
+          border:   'rgba(255,255,255,0.10)',
+          borderHv: 'rgba(255,255,255,0.20)',
+          pure:     '#ffffff',
+        },
+      },
+      borderColor: {
+        DEFAULT: 'rgba(255,255,255,0.10)',
+      },
+      fontSize: {
+        '2xs': ['10px', { lineHeight: '1.4', letterSpacing: '0.08em' }],
+      },
+      letterSpacing: {
+        apple:    '-0.04em',
+        appleSm:  '-0.02em',
+        appleWide: '0.06em',
       },
       boxShadow: {
-        'neon-sm':  '0 0 8px rgba(0,212,255,0.3)',
-        'neon-md':  '0 0 20px rgba(0,212,255,0.25)',
-        'neon-lg':  '0 0 40px rgba(0,212,255,0.2)',
-        'neon-purple': '0 0 20px rgba(168,85,247,0.3)',
-        'neon-green':  '0 0 20px rgba(57,255,20,0.3)',
+        'apple-sm':  '0 1px 3px rgba(0,0,0,0.6)',
+        'apple-md':  '0 4px 16px rgba(0,0,0,0.6)',
+        'apple-lg':  '0 8px 32px rgba(0,0,0,0.7)',
+        'apple-xl':  '0 20px 60px rgba(0,0,0,0.8)',
       },
       animation: {
-        'pulse-neon':   'pulse-neon 2s cubic-bezier(0.4,0,0.6,1) infinite',
-        'scan-line':    'scan-line 8s linear infinite',
-        'border-flow':  'border-flow 3s linear infinite',
-        'flicker':      'flicker 0.15s infinite',
-        'data-stream':  'data-stream 1.5s ease-in-out infinite',
+        'apple-fade-up':   'apple-fade-up 0.5s cubic-bezier(0.25,0.46,0.45,0.94) forwards',
+        'apple-fade-in':   'apple-fade-in 0.35s ease forwards',
+        'apple-scale-in':  'apple-scale-in 0.3s cubic-bezier(0.34,1.56,0.64,1) forwards',
+        'apple-stagger-1': 'apple-fade-up 0.5s 0.05s cubic-bezier(0.25,0.46,0.45,0.94) forwards',
+        'apple-stagger-2': 'apple-fade-up 0.5s 0.12s cubic-bezier(0.25,0.46,0.45,0.94) forwards',
+        'apple-stagger-3': 'apple-fade-up 0.5s 0.20s cubic-bezier(0.25,0.46,0.45,0.94) forwards',
+        'progress-bar':    'progress-bar 1.6s ease-in-out infinite',
       },
       keyframes: {
-        'pulse-neon': {
-          '0%, 100%': { boxShadow: '0 0 8px rgba(0,212,255,0.3)' },
-          '50%':       { boxShadow: '0 0 25px rgba(0,212,255,0.7)' },
+        'apple-fade-up': {
+          '0%':   { opacity: '0', transform: 'translateY(16px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
         },
-        'scan-line': {
-          '0%':   { transform: 'translateY(-100%)' },
-          '100%': { transform: 'translateY(100vh)' },
+        'apple-fade-in': {
+          '0%':   { opacity: '0' },
+          '100%': { opacity: '1' },
         },
-        'border-flow': {
-          '0%':   { backgroundPosition: '0% 50%' },
-          '50%':  { backgroundPosition: '100% 50%' },
-          '100%': { backgroundPosition: '0% 50%' },
+        'apple-scale-in': {
+          '0%':   { opacity: '0', transform: 'scale(0.94)' },
+          '100%': { opacity: '1', transform: 'scale(1)' },
         },
-        'flicker': {
-          '0%, 100%': { opacity: '1' },
-          '50%':      { opacity: '0.8' },
-        },
-        'data-stream': {
-          '0%':   { strokeDashoffset: '100' },
-          '100%': { strokeDashoffset: '0' },
+        'progress-bar': {
+          '0%':   { transform: 'translateX(-100%)' },
+          '100%': { transform: 'translateX(400%)' },
         },
       },
     },

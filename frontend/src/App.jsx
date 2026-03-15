@@ -306,7 +306,7 @@ function App() {
   }, [handleQueryStart]);
 
   return (
-    <div className="h-full w-full flex flex-col text-cyber-text font-sans selection:bg-cyber-primary selection:text-cyber-darker overflow-hidden">
+    <div className="h-full w-full flex flex-col overflow-hidden" style={{ background: '#000000', color: '#f5f5f7' }}>
       <CyberCursor />
       <CommandPalette
         isOpen={cmdPaletteOpen}
@@ -323,35 +323,34 @@ function App() {
         onClose={closeToast}
       />
 
-      {/* Background Effects */}
-      <AnimatedBackground />
+
 
       {/* Main Layout Container */}
       <motion.div variants={containerVariants} initial="hidden" animate="visible" className="flex-1 flex flex-col lg:flex-row overflow-hidden w-full relative">
 
         {/* Left Column: Main Content (Files + Q&A) */}
-        <motion.main variants={itemVariants} className="flex-1 flex flex-col min-w-0 h-full overflow-hidden relative z-0 glass-card p-4">
-          <div className="flex-none py-4 sm:py-6 text-center border-b border-cyber-primary/10 bg-cyber-darker/30 backdrop-blur-sm">
-            <h1 className="text-3xl md:text-4xl font-bold font-display bg-clip-text text-transparent bg-gradient-to-r from-cyber-primary to-cyber-secondary tracking-tight drop-shadow-[0_0_10px_rgba(0,212,255,0.3)]">
+        <motion.main variants={itemVariants} className="flex-1 flex flex-col min-w-0 h-full overflow-hidden relative z-0 p-4">
+          <div className="flex-none py-5 sm:py-7 text-center" style={{ borderBottom: '0.5px solid rgba(255,255,255,0.08)' }}>
+            <h1 className="font-display font-bold tracking-[-0.04em]" style={{ fontSize: 'clamp(26px,4vw,38px)', color: '#f5f5f7', letterSpacing: '-0.04em' }}>
               RAG TERMINAL
             </h1>
-            <p className="text-cyber-text/60 text-xs sm:text-sm uppercase tracking-widest mt-1">
+            <p className="apple-caption mt-2">
               Advanced Document Analysis System
             </p>
             <button
               onClick={() => setCmdPaletteOpen(true)}
               data-cursor-hover="true"
-              className="mt-2 text-[10px] text-cyber-text/25 border border-cyber-primary/10 px-3 py-1 rounded-full font-mono hover:text-cyber-primary/60 hover:border-cyber-primary/30 transition-all"
+              className="mt-2 apple-caption apple-btn apple-btn-ghost px-3 py-1 text-[10px]"
             >
               ⌘K command palette
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto custom-scrollbar p-2 sm:p-4 lg:p-6">
+          <div className="flex-1 overflow-y-auto custom-scrollbar p-3 sm:p-5 lg:p-7">
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 max-w-[1600px] mx-auto w-full">
 
               {/* File Upload + Document Selector Section */}
-              <div className="xl:col-span-1 flex flex-col gap-6 glass-card p-4">
+              <div className="xl:col-span-1 flex flex-col gap-6 p-4">
                 <FileUpload onUploadSuccess={handleUploadSuccess} />
 
                 {/* Document Selector */}
@@ -362,25 +361,25 @@ function App() {
                 />
 
                 {uploadedFiles.length > 0 && (
-                  <div className="bg-cyber-darker/50 backdrop-blur-md border border-cyber-primary/20 rounded-xl p-4 shadow-lg shadow-cyber-primary/5">
-                    <div className="flex items-center justify-between mb-4 border-b border-cyber-primary/20 pb-2">
-                      <h3 className="text-cyber-primary font-semibold tracking-wide flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-cyber-primary shadow-[0_0_8px_rgba(0,212,255,0.8)]"></span>
+                  <div className="apple-card p-4">
+                    <div className="flex items-center justify-between mb-4 border-b border-white/10 pb-2">
+                      <h3 className="apple-caption flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full" style={{ background: 'rgba(245,245,247,0.4)' }}></span>
                         DATA_MODULES
                       </h3>
-                      <span className="text-xs text-cyber-text/50 bg-cyber-primary/10 px-2 py-0.5 rounded font-mono">
+                      <span className="doc-selector-badge">
                         {uploadedFiles.length}
                       </span>
                     </div>
                     <ul className="space-y-2 max-h-[300px] overflow-y-auto pr-1 custom-scrollbar">
                       {uploadedFiles.map((file, index) => (
-                        <li key={index} className="group flex items-center justify-between bg-cyber-darker/80 p-3 rounded-lg border border-white/5 hover:border-cyber-primary/40 transition-all duration-300 hover:shadow-[0_0_15px_rgba(0,212,255,0.1)]">
-                          <span className="text-sm truncate max-w-[180px] text-cyber-text/80 group-hover:text-cyber-primary transition-colors">
+                        <li key={index} className="group flex items-center justify-between p-3 rounded-xl transition-all duration-200" style={{ background: 'rgba(255,255,255,0.02)', border: '0.5px solid transparent' }} onMouseEnter={(e) => e.currentTarget.style.borderColor='rgba(255,255,255,0.1)'} onMouseLeave={(e) => e.currentTarget.style.borderColor='transparent'}>
+                          <span className="text-sm truncate max-w-[180px] transition-colors" style={{ color: 'rgba(245,245,247,0.65)' }}>
                             {file}
                           </span>
                           <button
                             onClick={() => handleDelete(file)}
-                            className="opacity-0 group-hover:opacity-100 p-1.5 text-cyber-secondary hover:bg-cyber-secondary/20 rounded transition-all duration-300"
+                            className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg transition-all duration-200" style={{ color: 'rgba(245,245,247,0.4)' }}
                             title="Delete Protocol"
                           >
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -396,7 +395,7 @@ function App() {
 
               {/* Q&A Section */}
               <div className="xl:col-span-2 flex flex-col gap-6">
-                <div className="flex-none sticky top-0 z-10 bg-transparent glass-card p-4">
+                <div className="flex-none sticky top-0 z-10 bg-transparent p-4">
                   <QuestionInput
                     onQueryStart={handleQueryStart}
                     disabled={uploadedFiles.length === 0}
@@ -404,7 +403,7 @@ function App() {
                   />
                 </div>
 
-                <div ref={answerRef} className="min-h-[200px] glass-card p-4">
+                <div ref={answerRef} className="min-h-[200px] p-4">
                   <AnimatePresence mode="wait">
                     {(currentAnswer || isQuerying) && (
                       <motion.div
@@ -432,7 +431,7 @@ function App() {
         </motion.main>
 
         {/* Right Column: Logs Panel (Sidebar) */}
-        <motion.aside variants={itemVariants} className="w-full lg:w-[260px] xl:w-[280px] flex-none h-[40vh] lg:h-full border-t lg:border-t-0 lg:border-l border-cyber-primary/10 bg-cyber-darker/50 backdrop-blur-md overflow-hidden z-20 glass-card">
+        <motion.aside variants={itemVariants} className="w-full lg:w-[260px] xl:w-[280px] flex-none h-[40vh] lg:h-full overflow-hidden z-20" style={{ borderTop: '0.5px solid rgba(255,255,255,0.08)', borderLeft: '0.5px solid rgba(255,255,255,0.08)', background: '#161617' }}>
           <ConversationHistory
             history={conversationHistory}
             onClearHistory={handleClearHistory}
@@ -442,7 +441,7 @@ function App() {
 
       </motion.div>
 
-      <footer className="fixed bottom-0 left-0 w-full text-center py-1 text-[10px] text-cyber-text/30 pointer-events-none z-50 mix-blend-screen">
+      <footer className="fixed bottom-0 left-0 w-full text-center py-1 pointer-events-none z-50 apple-caption" style={{ opacity: 0.25 }}>
         SYSTEM_VERSION_2.0 // CYBER_CORE_INIT // RAG_BACKEND_CONNECTED
       </footer>
     </div>

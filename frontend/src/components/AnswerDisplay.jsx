@@ -80,7 +80,7 @@ function ConfidenceArc({ value }) {
         </text>
       </svg>
       <div>
-        <div className="text-[10px] uppercase tracking-widest text-cyber-text/40 font-mono">Confidence</div>
+        <div className="text-[10px] uppercase tracking-widest text-white/40 font-mono">Confidence</div>
         <div className="text-sm font-display font-bold" style={{ color }}>{label}</div>
       </div>
     </div>
@@ -212,7 +212,7 @@ function SynapseLoader() {
 
       <div className="flex items-center gap-2">
         <span
-          className="text-cyber-primary text-xs uppercase tracking-widest font-display"
+          className="text-[#f5f5f7] text-xs uppercase tracking-widest font-display"
           style={{ animation: 'synapse-text-pulse 1.8s ease-in-out infinite' }}
         >
           Neural Processing
@@ -220,7 +220,7 @@ function SynapseLoader() {
         {[0, 0.2, 0.4].map((delay, i) => (
           <span
             key={i}
-            className="w-1 h-1 rounded-full bg-cyber-primary"
+            className="w-1 h-1 rounded-full bg-[#f5f5f7]"
             style={{ animation: `synapse-dot 1.2s ease-in-out ${delay}s infinite` }}
           />
         ))}
@@ -269,8 +269,14 @@ export default function AnswerDisplay({ answer, isLoading, isThinking, isStreami
         return (
             <div className="answer-display">
                 <h2>Answer</h2>
-                <div className="empty-state">
-                    Your answer will appear here
+                <div className="flex flex-col items-center justify-center py-12 gap-3">
+                    <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                        <rect x="6" y="4" width="20" height="24" rx="3" stroke="rgba(245,245,247,0.15)" strokeWidth="1"/>
+                        <line x1="10" y1="10" x2="22" y2="10" stroke="rgba(245,245,247,0.12)" strokeWidth="1"/>
+                        <line x1="10" y1="14" x2="22" y2="14" stroke="rgba(245,245,247,0.12)" strokeWidth="1"/>
+                        <line x1="10" y1="18" x2="18" y2="18" stroke="rgba(245,245,247,0.12)" strokeWidth="1"/>
+                    </svg>
+                    <p className="apple-caption">Upload a document and ask a question</p>
                 </div>
             </div>
         );
@@ -296,22 +302,22 @@ export default function AnswerDisplay({ answer, isLoading, isThinking, isStreami
                     </div>
                 </div>
 
-                <div className="overflow-x-auto rounded-lg border border-cyber-primary/20 shadow-[0_0_15px_rgba(0,212,255,0.05)] custom-scrollbar max-h-[500px]">
-                    <table className="w-full text-left border-collapse">
-                        <thead className="bg-gradient-to-r from-cyber-darker to-cyber-primary/10 sticky top-0 z-10">
+                <div className="answer-markdown overflow-x-auto">
+                    <table>
+                        <thead>
                             <tr>
                                 {answer.columns.map((col, idx) => (
-                                    <th key={idx} className="p-3 text-xs font-bold text-cyber-primary uppercase tracking-wider border-b border-cyber-primary/20 whitespace-nowrap">
+                                    <th key={idx}>
                                         {col}
                                     </th>
                                 ))}
                             </tr>
                         </thead>
-                        <tbody className="bg-cyber-darker/50 divide-y divide-white/5">
+                        <tbody>
                             {answer.rows.map((row, rowIdx) => (
-                                <tr key={rowIdx} className="hover:bg-cyber-primary/5 transition-colors duration-200">
+                                <tr key={rowIdx}>
                                     {answer.columns.map((col, colIdx) => (
-                                        <td key={colIdx} className="p-3 text-sm text-cyber-text border-r border-white/5 last:border-r-0 whitespace-nowrap">
+                                        <td key={colIdx}>
                                             {row[col]}
                                         </td>
                                     ))}
@@ -366,22 +372,22 @@ export default function AnswerDisplay({ answer, isLoading, isThinking, isStreami
                     <h2>Generated Analysis</h2>
                     {!isStreaming && <ConfidenceBadge confidence={confidence} />}
                 </div>
-                <div className="overflow-x-auto rounded-lg border border-cyber-primary/20 shadow-[0_0_15px_rgba(0,212,255,0.05)] custom-scrollbar max-h-[500px] mt-4">
-                    <table className="w-full text-left border-collapse">
-                        <thead className="bg-gradient-to-r from-cyber-darker to-cyber-primary/10 sticky top-0 z-10">
+                <div className="answer-markdown overflow-x-auto">
+                    <table>
+                        <thead>
                             <tr>
                                 {fallbackTableData.columns.map((col, idx) => (
-                                    <th key={idx} className="p-3 text-xs font-bold text-cyber-primary uppercase tracking-wider border-b border-cyber-primary/20 whitespace-nowrap">
+                                    <th key={idx}>
                                         {col}
                                     </th>
                                 ))}
                             </tr>
                         </thead>
-                        <tbody className="bg-cyber-darker/50 divide-y divide-white/5">
+                        <tbody>
                             {fallbackTableData.rows.map((row, rowIdx) => (
-                                <tr key={rowIdx} className="hover:bg-cyber-primary/5 transition-colors duration-200">
+                                <tr key={rowIdx}>
                                     {fallbackTableData.columns.map((col, colIdx) => (
-                                        <td key={colIdx} className="p-3 text-sm text-cyber-text border-r border-white/5 last:border-r-0 whitespace-nowrap">
+                                        <td key={colIdx}>
                                             {typeof row[col] === 'object' ? JSON.stringify(row[col]) : row[col]}
                                         </td>
                                     ))}

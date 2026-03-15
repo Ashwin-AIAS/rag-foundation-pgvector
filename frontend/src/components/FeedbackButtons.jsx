@@ -53,7 +53,7 @@ export default function FeedbackButtons({ question, answer, numChunksRetrieved, 
     return (
         <div className="flex flex-col items-end gap-2">
             <div className="flex items-center gap-3">
-                <span className="text-[10px] uppercase tracking-widest text-cyber-text/40">Rate Response:</span>
+                <span className="text-[10px] uppercase tracking-widest text-white/40">Rate Response:</span>
 
                 <div className="flex gap-2">
                     <button
@@ -61,7 +61,7 @@ export default function FeedbackButtons({ question, answer, numChunksRetrieved, 
                             p-1.5 rounded transition-all duration-300 flex items-center gap-1.5
                             ${feedbackGiven === 'positive'
                                 ? 'bg-green-500/20 text-green-400 border border-green-500/50 shadow-[0_0_10px_rgba(74,222,128,0.2)]'
-                                : 'text-cyber-text/50 hover:text-green-400 hover:bg-green-500/10'
+                                : 'text-white/50 hover:text-green-400 hover:bg-green-500/10'
                             }
                             ${(feedbackGiven && feedbackGiven !== 'positive') || isSubmitting ? 'opacity-30 cursor-not-allowed' : ''}
                         `}
@@ -80,7 +80,7 @@ export default function FeedbackButtons({ question, answer, numChunksRetrieved, 
                             p-1.5 rounded transition-all duration-300 flex items-center gap-1.5
                             ${feedbackGiven === 'negative'
                                 ? 'bg-red-500/20 text-red-400 border border-red-500/50 shadow-[0_0_10px_rgba(248,113,113,0.2)]'
-                                : 'text-cyber-text/50 hover:text-red-400 hover:bg-red-500/10'
+                                : 'text-white/50 hover:text-red-400 hover:bg-red-500/10'
                             }
                             ${(feedbackGiven && feedbackGiven !== 'negative') || isSubmitting ? 'opacity-30 cursor-not-allowed' : ''}
                         `}
@@ -97,7 +97,7 @@ export default function FeedbackButtons({ question, answer, numChunksRetrieved, 
             </div>
 
             {feedbackGiven && (
-                <div className="text-[10px] text-cyber-primary tracking-wider animate-pulse font-mono">
+                <div className="apple-caption animate-pulse font-mono">
                     FEEDBACK_LOGGED_SUCCESSFULLY
                 </div>
             )}

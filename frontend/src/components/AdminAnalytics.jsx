@@ -83,7 +83,7 @@ export default function AdminAnalytics() {
                                     initial={{ opacity: 0, y: 10 }}
                                     animate={{ opacity: 1, y: 0 }}
                                     transition={{ delay: index * 0.1 }}
-                                    className="kpi-card group hover:border-cyber-primary/40 transition-all duration-300"
+                                    className="kpi-card group hover:border-white/20 transition-all duration-300"
                                     style={{ cursor: 'default' }}
                                   >
                                     <motion.div
