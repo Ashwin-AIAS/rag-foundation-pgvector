@@ -8,6 +8,25 @@ import DocumentSelector from './components/DocumentSelector';
 import AdminAnalytics from './components/AdminAnalytics';
 import LoadingOverlay from './components/LoadingOverlay';
 import Toast from './components/Toast';
+import AnimatedBackground from './components/AnimatedBackground';
+import CyberCursor from './components/CyberCursor';
+import CommandPalette from './components/CommandPalette';
+import { motion, AnimatePresence } from 'framer-motion';
+
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.08, delayChildren: 0.1 },
+  },
+};
+
+const itemVariants = {
+  hidden:  { opacity: 0, y: 24, scale: 0.98 },
+  visible: { opacity: 1, y: 0,  scale: 1,
+    transition: { duration: 0.45, ease: [0.25, 0.46, 0.45, 0.94] }
+  },
+};
 
 // --- localStorage helpers ---
 const STORAGE_KEY = 'rag_conversation_history';
@@ -40,6 +59,7 @@ function App() {
   const [conversationHistory, setConversationHistory] = useState(() => loadHistory());
   const [selectedDocs, setSelectedDocs] = useState([]);
   const [confidence, setConfidence] = useState(null);
+  const [cmdPaletteOpen, setCmdPaletteOpen] = useState(false);
   const [toast, setToast] = useState({ message: null, type: 'error' });
 
   // Ref for cancelling in-flight requests
@@ -49,6 +69,17 @@ function App() {
 
   useEffect(() => {
     fetchDocuments();
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setCmdPaletteOpen(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
   // Persist conversation to localStorage whenever it changes
@@ -270,8 +301,21 @@ function App() {
     }
   };
 
+  const handleSelectQuery = useCallback((questionText) => {
+    handleQueryStart(questionText);
+  }, [handleQueryStart]);
+
   return (
     <div className="h-full w-full flex flex-col text-cyber-text font-sans selection:bg-cyber-primary selection:text-cyber-darker overflow-hidden">
+      <CyberCursor />
+      <CommandPalette
+        isOpen={cmdPaletteOpen}
+        onClose={() => setCmdPaletteOpen(false)}
+        conversationHistory={conversationHistory}
+        uploadedFiles={uploadedFiles}
+        onClearHistory={handleClearHistory}
+        onSelectQuery={handleSelectQuery}
+      />
       <LoadingOverlay isLoading={isQuerying} />
       <Toast
         message={toast.message}
@@ -280,30 +324,34 @@ function App() {
       />
 
       {/* Background Effects */}
-      <div className="fixed inset-0 pointer-events-none z-[-1]">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[500px] bg-cyber-primary/10 rounded-full blur-[120px] opacity-20"></div>
-        <div className="absolute bottom-0 right-0 w-[600px] h-[400px] bg-cyber-secondary/10 rounded-full blur-[100px] opacity-20"></div>
-      </div>
+      <AnimatedBackground />
 
       {/* Main Layout Container */}
-      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden w-full relative">
+      <motion.div variants={containerVariants} initial="hidden" animate="visible" className="flex-1 flex flex-col lg:flex-row overflow-hidden w-full relative">
 
         {/* Left Column: Main Content (Files + Q&A) */}
-        <main className="flex-1 flex flex-col min-w-0 h-full overflow-hidden relative z-0">
+        <motion.main variants={itemVariants} className="flex-1 flex flex-col min-w-0 h-full overflow-hidden relative z-0 glass-card p-4">
           <div className="flex-none py-4 sm:py-6 text-center border-b border-cyber-primary/10 bg-cyber-darker/30 backdrop-blur-sm">
-            <h1 className="text-3xl md:text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-cyber-primary to-cyber-secondary tracking-tight drop-shadow-[0_0_10px_rgba(0,212,255,0.3)]">
+            <h1 className="text-3xl md:text-4xl font-bold font-display bg-clip-text text-transparent bg-gradient-to-r from-cyber-primary to-cyber-secondary tracking-tight drop-shadow-[0_0_10px_rgba(0,212,255,0.3)]">
               RAG TERMINAL
             </h1>
             <p className="text-cyber-text/60 text-xs sm:text-sm uppercase tracking-widest mt-1">
               Advanced Document Analysis System
             </p>
+            <button
+              onClick={() => setCmdPaletteOpen(true)}
+              data-cursor-hover="true"
+              className="mt-2 text-[10px] text-cyber-text/25 border border-cyber-primary/10 px-3 py-1 rounded-full font-mono hover:text-cyber-primary/60 hover:border-cyber-primary/30 transition-all"
+            >
+              ⌘K command palette
+            </button>
           </div>
 
           <div className="flex-1 overflow-y-auto custom-scrollbar p-2 sm:p-4 lg:p-6">
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 max-w-[1600px] mx-auto w-full">
 
               {/* File Upload + Document Selector Section */}
-              <div className="xl:col-span-1 flex flex-col gap-6">
+              <div className="xl:col-span-1 flex flex-col gap-6 glass-card p-4">
                 <FileUpload onUploadSuccess={handleUploadSuccess} />
 
                 {/* Document Selector */}
@@ -348,7 +396,7 @@ function App() {
 
               {/* Q&A Section */}
               <div className="xl:col-span-2 flex flex-col gap-6">
-                <div className="flex-none sticky top-0 z-10 bg-transparent">
+                <div className="flex-none sticky top-0 z-10 bg-transparent glass-card p-4">
                   <QuestionInput
                     onQueryStart={handleQueryStart}
                     disabled={uploadedFiles.length === 0}
@@ -356,31 +404,43 @@ function App() {
                   />
                 </div>
 
-                <div ref={answerRef} className="min-h-[200px]">
-                  <AnswerDisplay
-                    answer={currentAnswer}
-                    isLoading={isQuerying}
-                    isThinking={isThinking}
-                    isStreaming={isStreaming}
-                    confidence={confidence}
-                  />
+                <div ref={answerRef} className="min-h-[200px] glass-card p-4">
+                  <AnimatePresence mode="wait">
+                    {(currentAnswer || isQuerying) && (
+                      <motion.div
+                        key={currentAnswer?.question || 'loading'}
+                        variants={itemVariants}
+                        initial="hidden"
+                        animate="visible"
+                        exit={{ opacity: 0, y: -10, transition: { duration: 0.2 } }}
+                      >
+                        <AnswerDisplay
+                          answer={currentAnswer}
+                          isLoading={isQuerying}
+                          isThinking={isThinking}
+                          isStreaming={isStreaming}
+                          confidence={confidence}
+                        />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
               </div>
 
             </div>
           </div>
-        </main>
+        </motion.main>
 
         {/* Right Column: Logs Panel (Sidebar) */}
-        <aside className="w-full lg:w-[260px] xl:w-[280px] flex-none h-[40vh] lg:h-full border-t lg:border-t-0 lg:border-l border-cyber-primary/10 bg-cyber-darker/50 backdrop-blur-md overflow-hidden z-20">
+        <motion.aside variants={itemVariants} className="w-full lg:w-[260px] xl:w-[280px] flex-none h-[40vh] lg:h-full border-t lg:border-t-0 lg:border-l border-cyber-primary/10 bg-cyber-darker/50 backdrop-blur-md overflow-hidden z-20 glass-card">
           <ConversationHistory
             history={conversationHistory}
             onClearHistory={handleClearHistory}
           />
           <AdminAnalytics />
-        </aside>
+        </motion.aside>
 
-      </div>
+      </motion.div>
 
       <footer className="fixed bottom-0 left-0 w-full text-center py-1 text-[10px] text-cyber-text/30 pointer-events-none z-50 mix-blend-screen">
         SYSTEM_VERSION_2.0 // CYBER_CORE_INIT // RAG_BACKEND_CONNECTED

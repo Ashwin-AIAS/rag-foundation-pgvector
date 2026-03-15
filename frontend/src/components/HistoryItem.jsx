@@ -37,16 +37,18 @@ export default function HistoryItem({ item }) {
     return (
         <motion.div
             layout
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
+            initial={{ opacity: 0, x: -20, scale: 0.97 }}
+            animate={{ opacity: 1, x: 0, scale: 1 }}
+            exit={{ opacity: 0, x: -20, scale: 0.97 }}
+            transition={{ type: 'spring', stiffness: 380, damping: 28 }}
+            whileHover={{ x: 3, transition: { type: 'spring', stiffness: 500, damping: 25 } }}
             className={`
                 group rounded-lg border transition-all duration-300 overflow-hidden cursor-pointer backdrop-blur-sm
+                ${item.isRefusal ? 'history-item-refusal' : 'history-item-success'}
                 ${isExpanded
-                    ? 'bg-cyber-darker border-cyber-primary shadow-[0_0_15px_rgba(0,212,255,0.1)]'
+                    ? 'bg-cyber-darker border-cyber-primary shadow-neon-sm'
                     : 'bg-black/20 border-white/5 hover:border-cyber-primary/50 hover:bg-cyber-darker/60'
                 }
-                ${item.isRefusal ? 'border-cyber-secondary/30 bg-cyber-secondary/5' : ''}
             `}
             onClick={toggleExpanded}
         >
@@ -74,6 +76,8 @@ export default function HistoryItem({ item }) {
                         initial={{ height: 0, opacity: 0 }}
                         animate={{ height: 'auto', opacity: 1 }}
                         exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.25, ease: [0.25, 0.46, 0.45, 0.94] }}
+                        style={{ overflow: 'hidden' }}
                         className="bg-black/30 border-t border-cyber-primary/10 px-3 py-3 text-xs"
                     >
                         <div className="mb-3">

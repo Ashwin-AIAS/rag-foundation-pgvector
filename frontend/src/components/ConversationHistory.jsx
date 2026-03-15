@@ -37,10 +37,25 @@ export default function ConversationHistory({ history, onClearHistory }) {
 
             <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
                 {history.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-48 text-cyber-text/30">
-                        <p className="text-xs uppercase tracking-widest text-center">No Data Streams Active</p>
-                        <p className="text-[10px] opacity-50 mt-1">Execute query to initialize logs</p>
-                    </div>
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ delay: 0.3, duration: 0.4 }}
+                        className="flex flex-col items-center justify-center h-48 text-cyber-text/30"
+                    >
+                        <motion.div
+                            animate={{ opacity: [0.3, 0.7, 0.3] }}
+                            transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
+                        >
+                            <svg width="32" height="32" viewBox="0 0 32 32" fill="none" className="mb-3 opacity-40">
+                                <circle cx="16" cy="16" r="12" stroke="#00d4ff" strokeWidth="1" strokeDasharray="4 4"/>
+                                <circle cx="16" cy="16" r="6" stroke="#00d4ff" strokeWidth="1" opacity="0.5"/>
+                                <circle cx="16" cy="16" r="2" fill="#00d4ff" opacity="0.6"/>
+                            </svg>
+                        </motion.div>
+                        <p className="text-xs uppercase tracking-widest text-center font-display">No Data Streams Active</p>
+                        <p className="text-[10px] opacity-50 mt-1 font-mono">Execute query to initialize logs</p>
+                    </motion.div>
                 ) : (
                     <div className="space-y-3">
                         <AnimatePresence>

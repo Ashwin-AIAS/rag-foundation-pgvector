@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { uploadFile, pollIngestStatus } from '../services/api';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export default function FileUpload({ onUploadSuccess }) {
     const [isDragging, setIsDragging] = useState(false);
@@ -8,15 +8,24 @@ export default function FileUpload({ onUploadSuccess }) {
     const [message, setMessage] = useState(null);
     const [uploadProgress, setUploadProgress] = useState(0);
     const [jobStatuses, setJobStatuses] = useState([]);
+    const [particles, setParticles] = useState([]);
 
     const handleDragOver = useCallback((e) => {
         e.preventDefault();
         setIsDragging(true);
     }, []);
 
-    const handleDragLeave = useCallback((e) => {
-        e.preventDefault();
-        setIsDragging(false);
+    const handleDragLeave = useCallback(() => setIsDragging(false), []);
+
+    const triggerParticles = useCallback(() => {
+        const newParticles = Array.from({ length: 12 }, (_, i) => ({
+            id: Date.now() + i,
+            x: Math.random() * 100,
+            angle: (i / 12) * 360,
+            color: ['#00d4ff','#a855f7','#39FF14'][i % 3],
+        }));
+        setParticles(newParticles);
+        setTimeout(() => setParticles([]), 1000);
     }, []);
 
     const processFiles = async (files) => {
@@ -91,7 +100,10 @@ export default function FileUpload({ onUploadSuccess }) {
                 });
             }
 
-            if (completed.length > 0 && onUploadSuccess) onUploadSuccess();
+            if (completed.length > 0 && onUploadSuccess) {
+                onUploadSuccess();
+                triggerParticles();
+            }
             setJobStatuses([]);
 
         } catch (error) {
@@ -112,10 +124,11 @@ export default function FileUpload({ onUploadSuccess }) {
     const handleDrop = useCallback((e) => {
         e.preventDefault();
         setIsDragging(false);
-        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        const file = e.dataTransfer.files[0];
+        if (file) {
             processFiles(e.dataTransfer.files);
         }
-    }, []);
+    }, [processFiles]);
 
     const handleFileSelect = (e) => {
         if (e.target.files && e.target.files.length > 0) {
@@ -138,11 +151,36 @@ export default function FileUpload({ onUploadSuccess }) {
 
     return (
         <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="w-full"
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            animate={{
+                borderColor: isDragging ? 'rgba(0,212,255,0.8)' : 'rgba(0,212,255,0.2)',
+                boxShadow: isDragging ? '0 0 30px rgba(0,212,255,0.3), inset 0 0 30px rgba(0,212,255,0.05)' : '0 0 0px transparent',
+                scale: isDragging ? 1.02 : 1,
+            }}
+            transition={{ duration: 0.2 }}
+            className="relative w-full"
         >
+            <AnimatePresence>
+                {particles.map(p => (
+                    <motion.div
+                        key={p.id}
+                        initial={{ opacity: 1, scale: 1, x: `${p.x}%`, y: '50%' }}
+                        animate={{
+                            opacity: 0, scale: 0,
+                            x: `${p.x + Math.cos(p.angle * Math.PI/180) * 60}%`,
+                            y: `${50 + Math.sin(p.angle * Math.PI/180) * 60}%`,
+                        }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.8, ease: 'easeOut' }}
+                        style={{
+                            position: 'absolute', width: 6, height: 6, borderRadius: '50%',
+                            background: p.color, pointerEvents: 'none', zIndex: 10,
+                        }}
+                    />
+                ))}
+            </AnimatePresence>
             <div
                 className={`
           relative border-2 border-dashed rounded-xl p-8 text-center transition-all duration-300
@@ -152,9 +190,6 @@ export default function FileUpload({ onUploadSuccess }) {
                     }
           ${isUploading ? 'opacity-50 pointer-events-none' : ''}
         `}
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
             >
                 <input
                     type="file"

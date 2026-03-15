@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion, useMotionValue, useTransform } from 'framer-motion';
 
 function QuestionInput({ onQueryStart, disabled, isLoading }) {
     const [question, setQuestion] = useState('');
@@ -41,12 +41,16 @@ function QuestionInput({ onQueryStart, disabled, isLoading }) {
                     </select>
                 </div>
                 
-                <div className="relative flex-1">
+                <motion.div
+                    animate={{ boxShadow: question.length > 0 ? '0 0 15px rgba(0,212,255,0.2)' : '0 0 0px transparent' }}
+                    transition={{ duration: 0.3 }}
+                    className="relative flex-1"
+                >
                     <input
                         type="text"
                         value={question}
                         onChange={(e) => setQuestion(e.target.value)}
-                        placeholder={disabled ? "Upload documents to initialize system..." : "Enter query protocol..."}
+                        placeholder={disabled ? '> SYSTEM OFFLINE — upload documents to activate' : '> ENTER QUERY PROTOCOL...'}
                         disabled={disabled || isLoading}
                         className={`
               w-full bg-cyber-darker border border-cyber-primary/30 rounded-lg px-4 py-3 
@@ -60,22 +64,33 @@ function QuestionInput({ onQueryStart, disabled, isLoading }) {
                             <div className="w-4 h-4 border-2 border-cyber-primary border-t-transparent rounded-full animate-spin"></div>
                         </div>
                     )}
-                </div>
+                </motion.div>
 
                 <motion.button
-                    whileHover={{ scale: 1.02, boxShadow: "0 0 15px rgba(0, 212, 255, 0.4)" }}
-                    whileTap={{ scale: 0.98 }}
+                    whileHover={{ scale: 1.04, boxShadow: '0 0 20px rgba(0, 212, 255, 0.5)' }}
+                    whileTap={{ scale: 0.96 }}
+                    transition={{ type: 'spring', stiffness: 400, damping: 17 }}
                     type="submit"
                     disabled={disabled || isLoading || !question.trim()}
+                    data-cursor-hover="true"
                     className={`
-            px-6 py-3 rounded-lg font-bold uppercase tracking-wider text-sm transition-all duration-300
-            ${disabled || isLoading || !question.trim()
-                            ? 'bg-cyber-darker border border-cyber-text/10 text-cyber-text/20 cursor-not-allowed'
-                            : 'bg-gradient-to-r from-cyber-primary to-[#00a3cc] text-black border border-cyber-primary shadow-[0_0_10px_rgba(0,212,255,0.2)]'
-                        }
-          `}
+                      relative overflow-hidden px-6 py-3 rounded-lg font-bold uppercase tracking-wider text-sm
+                      transition-all duration-300 font-display
+                      ${disabled || isLoading || !question.trim()
+                        ? 'bg-cyber-darker border border-cyber-text/10 text-cyber-text/20 cursor-not-allowed'
+                        : 'bg-gradient-to-r from-cyber-primary to-[#00a3cc] text-black border border-cyber-primary shadow-neon-sm'
+                      }
+                    `}
                 >
-                    {isLoading ? 'PROCESSING...' : 'EXECUTE'}
+                    {isLoading ? (
+                        <span className="flex items-center gap-2">
+                            <svg className="animate-spin w-3 h-3" viewBox="0 0 24 24" fill="none">
+                                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeOpacity="0.25"/>
+                                <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round"/>
+                            </svg>
+                            PROCESSING
+                        </span>
+                    ) : 'EXECUTE'}
                 </motion.button>
             </form>
         </div>

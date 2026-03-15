@@ -1,52 +1,108 @@
-import React, { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-export default function Toast({ message, type = 'error', onClose, duration = 4000 }) {
-    useEffect(() => {
-        if (message) {
-            const timer = setTimeout(() => {
-                onClose();
-            }, duration);
-            return () => clearTimeout(timer);
-        }
-    }, [message, duration, onClose]);
+const ICONS = {
+  success: (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <circle cx="8" cy="8" r="7" stroke="#39FF14" strokeWidth="1.2"/>
+      <path d="M4.5 8l2.5 2.5 4.5-4.5" stroke="#39FF14" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  ),
+  error: (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <circle cx="8" cy="8" r="7" stroke="#ef4444" strokeWidth="1.2"/>
+      <path d="M5.5 5.5l5 5M10.5 5.5l-5 5" stroke="#ef4444" strokeWidth="1.5" strokeLinecap="round"/>
+    </svg>
+  ),
+  info: (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <circle cx="8" cy="8" r="7" stroke="#00d4ff" strokeWidth="1.2"/>
+      <path d="M8 7v4M8 5.5v.5" stroke="#00d4ff" strokeWidth="1.5" strokeLinecap="round"/>
+    </svg>
+  ),
+  warning: (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <path d="M8 2L14.5 13H1.5L8 2z" stroke="#fbbf24" strokeWidth="1.2" strokeLinejoin="round"/>
+      <path d="M8 7v3M8 11.5v.5" stroke="#fbbf24" strokeWidth="1.5" strokeLinecap="round"/>
+    </svg>
+  ),
+};
 
-    return (
-        <AnimatePresence>
-            {message && (
-                <motion.div
-                    initial={{ opacity: 0, y: 50, x: '-50%' }}
-                    animate={{ opacity: 1, y: 0, x: '-50%' }}
-                    exit={{ opacity: 0, y: 20, x: '-50%' }}
-                    className={`fixed bottom-8 left-1/2 z-50 px-6 py-3 rounded-lg shadow-lg border backdrop-blur-md min-w-[300px] flex items-center justify-between gap-4
-                        ${type === 'error'
-                            ? 'bg-red-900/80 border-red-500/50 text-white'
-                            : 'bg-green-900/80 border-green-500/50 text-white'
-                        }`}
+const COLORS = {
+  success: { border: 'rgba(57,255,20,0.3)',  glow: 'rgba(57,255,20,0.1)',  bar: '#39FF14' },
+  error:   { border: 'rgba(239,68,68,0.3)',  glow: 'rgba(239,68,68,0.1)', bar: '#ef4444' },
+  info:    { border: 'rgba(0,212,255,0.3)',  glow: 'rgba(0,212,255,0.1)', bar: '#00d4ff' },
+  warning: { border: 'rgba(251,191,36,0.3)', glow: 'rgba(251,191,36,0.1)',bar: '#fbbf24' },
+};
+
+const DURATION = 4000;
+
+export default function Toast({ message, type = 'info', onClose }) {
+  const [progress, setProgress] = useState(100);
+
+  useEffect(() => {
+    if (!message) return;
+    setProgress(100);
+    const start = Date.now();
+    const interval = setInterval(() => {
+      const elapsed = Date.now() - start;
+      const remaining = Math.max(0, 100 - (elapsed / DURATION) * 100);
+      setProgress(remaining);
+      if (remaining <= 0) { clearInterval(interval); onClose?.(); }
+    }, 30);
+    return () => clearInterval(interval);
+  }, [message]);
+
+  const c = COLORS[type] || COLORS.info;
+
+  return (
+    <div style={{ position: 'fixed', top: 20, right: 20, zIndex: 50000, display: 'flex', flexDirection: 'column', gap: 8, pointerEvents: 'none' }}>
+      <AnimatePresence>
+        {message && (
+          <motion.div
+            initial={{ opacity: 0, x: 60, scale: 0.95 }}
+            animate={{ opacity: 1, x: 0,  scale: 1 }}
+            exit={{ opacity: 0, x: 60, scale: 0.95 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+            style={{ pointerEvents: 'all' }}
+          >
+            <div
+              onClick={onClose}
+              style={{
+                background: 'rgba(10,15,28,0.95)',
+                border: `1px solid ${c.border}`,
+                borderRadius: 12,
+                padding: '12px 14px',
+                minWidth: 260, maxWidth: 380,
+                cursor: 'pointer',
+                boxShadow: `0 0 30px ${c.glow}, 0 8px 24px rgba(0,0,0,0.5)`,
+                overflow: 'hidden',
+                position: 'relative',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ flexShrink: 0 }}>{ICONS[type] || ICONS.info}</div>
+                <span style={{ fontSize: 13, color: 'rgba(230,241,255,0.9)', fontFamily: 'JetBrains Mono, monospace', lineHeight: 1.4 }}>
+                  {message}
+                </span>
+                <button
+                  onClick={(e) => { e.stopPropagation(); onClose?.(); }}
+                  style={{ marginLeft: 'auto', background: 'none', border: 'none', color: 'rgba(230,241,255,0.3)', fontSize: 16, cursor: 'pointer', lineHeight: 1, paddingLeft: 8 }}
                 >
-                    <div className="flex items-center gap-3">
-                        {type === 'error' ? (
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                            </svg>
-                        ) : (
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
-                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                            </svg>
-                        )}
-                        <span className="text-sm font-medium">{message}</span>
-                    </div>
+                  ×
+                </button>
+              </div>
 
-                    <button
-                        onClick={onClose}
-                        className="p-1 hover:bg-white/10 rounded-full transition-colors"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 opacity-70" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                        </svg>
-                    </button>
-                </motion.div>
-            )}
-        </AnimatePresence>
-    );
+              {/* Progress bar */}
+              <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 2, background: 'rgba(255,255,255,0.04)' }}>
+                <motion.div
+                  style={{ height: '100%', background: c.bar, width: `${progress}%`, originX: 0 }}
+                />
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
 }

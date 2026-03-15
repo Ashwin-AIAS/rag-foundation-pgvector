@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { getAnalytics } from '../services/api';
+import { motion } from 'framer-motion';
 
 /**
  * Simple bar chart drawn with pure CSS divs (no external chart library).
@@ -16,12 +17,12 @@ function MiniBarChart({ data, labelKey, valueKey, color = '#4fc3f7' }) {
                 <div key={i} className="bar-row">
                     <span className="bar-label">{d[labelKey]}</span>
                     <div className="bar-track">
-                        <div
+                        <motion.div
                             className="bar-fill"
-                            style={{
-                                width: `${(d[valueKey] / maxVal) * 100}%`,
-                                background: color,
-                            }}
+                            initial={{ width: 0 }}
+                            animate={{ width: `${Math.round((d[valueKey] / maxVal) * 100)}%` }}
+                            transition={{ duration: 0.8, delay: 0.3 + i * 0.08, ease: 'easeOut' }}
+                            style={{ background: ['#00d4ff', '#a855f7', '#39FF14', '#fbbf24'][i % 4] }}
                         />
                     </div>
                     <span className="bar-value">{d[valueKey]}</span>
@@ -54,13 +55,15 @@ export default function AdminAnalytics() {
 
     return (
         <div className="admin-analytics">
-            <button
-                className="analytics-toggle"
+            <motion.button
+                whileHover={{ x: 3 }}
+                whileTap={{ scale: 0.97 }}
+                className="analytics-toggle font-display"
                 onClick={() => setIsOpen(!isOpen)}
             >
                 <span>{isOpen ? '▾' : '▸'}</span>
                 <span>ANALYTICS</span>
-            </button>
+            </motion.button>
 
             {isOpen && (
                 <div className="analytics-body">
@@ -70,24 +73,41 @@ export default function AdminAnalytics() {
                         <>
                             {/* KPI Cards */}
                             <div className="kpi-grid">
-                                <div className="kpi-card">
-                                    <span className="kpi-value">{analytics.total_queries}</span>
-                                    <span className="kpi-label">Total Queries</span>
-                                </div>
-                                <div className="kpi-card">
-                                    <span className="kpi-value">{analytics.avg_response_time_ms}ms</span>
-                                    <span className="kpi-label">Avg Response</span>
-                                </div>
-                                <div className="kpi-card">
-                                    <span className="kpi-value">{analytics.avg_confidence}%</span>
-                                    <span className="kpi-label">Avg Confidence</span>
-                                </div>
+                                {[
+                                  { label: 'Total Queries', value: analytics.total_queries },
+                                  { label: 'Avg Response', value: `${analytics.avg_response_time_ms}ms` },
+                                  { label: 'Avg Confidence', value: `${analytics.avg_confidence}%` },
+                                ].map((kpi, index) => (
+                                  <motion.div
+                                    key={index}
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: index * 0.1 }}
+                                    className="kpi-card group hover:border-cyber-primary/40 transition-all duration-300"
+                                    style={{ cursor: 'default' }}
+                                  >
+                                    <motion.div
+                                      initial={{ scale: 0 }}
+                                      animate={{ scale: 1 }}
+                                      transition={{ type: 'spring', delay: 0.2 + index * 0.1, stiffness: 400, damping: 20 }}
+                                      className="kpi-value"
+                                      style={{
+                                        background: 'linear-gradient(135deg, #00d4ff, #a855f7)',
+                                        WebkitBackgroundClip: 'text',
+                                        WebkitTextFillColor: 'transparent',
+                                      }}
+                                    >
+                                      {kpi.value}
+                                    </motion.div>
+                                    <div className="kpi-label">{kpi.label}</div>
+                                  </motion.div>
+                                ))}
                             </div>
 
                             {/* Daily Query Volume */}
                             {analytics.daily_counts && analytics.daily_counts.length > 0 && (
                                 <div className="analytics-section">
-                                    <h4 className="analytics-section-title">Daily Volume (14d)</h4>
+                                    <h4 className="analytics-section-title font-display">Daily Volume (14d)</h4>
                                     <MiniBarChart
                                         data={analytics.daily_counts}
                                         labelKey="day"
@@ -99,7 +119,7 @@ export default function AdminAnalytics() {
                             {/* Recent Queries */}
                             {analytics.recent_queries && analytics.recent_queries.length > 0 && (
                                 <div className="analytics-section">
-                                    <h4 className="analytics-section-title">Recent Queries</h4>
+                                    <h4 className="analytics-section-title font-display">Recent Queries</h4>
                                     <ul className="recent-list">
                                         {analytics.recent_queries.slice(0, 8).map((q, i) => (
                                             <li key={i} className="recent-item">
