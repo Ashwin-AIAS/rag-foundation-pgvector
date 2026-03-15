@@ -97,9 +97,9 @@ function SourceCard({ chunk, index }) {
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 8 }}
+      initial={{ opacity: 0, y: 15 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.06, duration: 0.3 }}
+      transition={{ type: 'spring', stiffness: 350, damping: 25, delay: index * 0.08 }}
       whileHover={{ y: -1, borderColor: 'rgba(255,255,255,0.18)' }}
       onClick={() => setExpanded(!expanded)}
       style={{

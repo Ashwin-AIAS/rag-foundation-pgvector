@@ -37,10 +37,10 @@ export default function HistoryItem({ item }) {
     return (
         <motion.div
             layout
-            initial={{ opacity: 0, x: -20, scale: 0.97 }}
-            animate={{ opacity: 1, x: 0, scale: 1 }}
-            exit={{ opacity: 0, x: -20, scale: 0.97 }}
-            transition={{ type: 'spring', stiffness: 380, damping: 28 }}
+            initial={{ opacity: 0, y: 20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            transition={{ type: 'spring', stiffness: 420, damping: 30 }}
             whileHover={{ x: 3, transition: { type: 'spring', stiffness: 500, damping: 25 } }}
             className="group rounded-xl cursor-pointer overflow-hidden transition-all duration-200"
             style={{

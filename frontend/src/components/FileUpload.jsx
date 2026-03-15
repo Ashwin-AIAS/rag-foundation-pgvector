@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { uploadFile, pollIngestStatus } from '../services/api';
 import { motion, AnimatePresence } from 'framer-motion';
+import TiltCard from './TiltCard';
 
 export default function FileUpload({ onUploadSuccess }) {
     const [isDragging, setIsDragging] = useState(false);
@@ -177,7 +178,7 @@ export default function FileUpload({ onUploadSuccess }) {
                     />
                 ))}
             </AnimatePresence>
-            <div
+            <TiltCard
                 className={`apple-upload-zone p-8 text-center ${isDragging ? 'drag-over' : ''} ${isUploading ? 'opacity-40 pointer-events-none' : ''}`}
             >
                 <input
@@ -211,7 +212,7 @@ export default function FileUpload({ onUploadSuccess }) {
                         PDF, DOCX, TXT, CSV, Excel
                     </p>
                 </label>
-            </div>
+            </TiltCard>
 
             {isUploading && (
                <div className="mt-4 px-1">

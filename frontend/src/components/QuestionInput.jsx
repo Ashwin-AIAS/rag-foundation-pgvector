@@ -41,7 +41,7 @@ function QuestionInput({ onQueryStart, disabled, isLoading }) {
                         onChange={(e) => setQuestion(e.target.value)}
                         placeholder={disabled ? '> Upload documents to begin...' : '> Ask anything about your documents...'}
                         disabled={disabled || isLoading}
-                        className="apple-input"
+                        className="apple-input breathing-input"
                     />
                     {isLoading && (
                         <div className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -69,7 +69,7 @@ function QuestionInput({ onQueryStart, disabled, isLoading }) {
                                 <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeOpacity="0.25"/>
                                 <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round"/>
                             </svg>
-                            Analyzing...
+                            <span className="shimmer-text font-semibold">Analyzing...</span>
                         </span>
                     ) : 'Analyze'}
                 </motion.button>

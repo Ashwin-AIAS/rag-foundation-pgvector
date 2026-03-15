@@ -12,20 +12,20 @@ export default function AnimatedBackground() {
     let h = canvas.height = window.innerHeight;
     let raf;
 
-    const PARTICLE_COUNT = 70;
+    const PARTICLE_COUNT = 60;
     const CONNECT_DIST = 130;
     const COLORS = [
-      'rgba(245,245,247,0.7)',
-      'rgba(245,245,247,0.4)',
-      'rgba(245,245,247,0.55)',
+      'rgba(255,255,255,0.4)',
+      'rgba(255,255,255,0.15)',
+      'rgba(255,255,255,0.25)',
     ];
 
     const particles = Array.from({ length: PARTICLE_COUNT }, () => ({
       x: Math.random() * w,
       y: Math.random() * h,
-      vx: (Math.random() - 0.5) * 0.35,
-      vy: (Math.random() - 0.5) * 0.35,
-      r: Math.random() * 2 + 1,
+      vx: (Math.random() - 0.5) * 0.15,
+      vy: (Math.random() - 0.5) * 0.15,
+      r: (Math.random() * 1.5) + 0.5,
       color: COLORS[Math.floor(Math.random() * COLORS.length)],
     }));
 
@@ -79,9 +79,9 @@ export default function AnimatedBackground() {
           const ey = p.y - q.y;
           const ed = Math.sqrt(ex*ex + ey*ey);
           if (ed < CONNECT_DIST) {
-            const alpha = (1 - ed / CONNECT_DIST) * 0.25;
+            const alpha = (1 - ed / CONNECT_DIST) * 0.15;
             ctx.beginPath();
-            ctx.strokeStyle = `rgba(245,245,247,${alpha * 0.6})`;
+            ctx.strokeStyle = `rgba(255,255,255,${alpha})`;
             ctx.lineWidth = 0.6;
             ctx.moveTo(p.x, p.y);
             ctx.lineTo(q.x, q.y);
@@ -95,10 +95,10 @@ export default function AnimatedBackground() {
         ctx.fillStyle = p.color;
         ctx.fill();
 
-        // Glow
+        // Glow (barely visible)
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.r + 2, 0, Math.PI * 2);
-        ctx.fillStyle = p.color.replace(/[\d.]+\)$/, '0.08)');
+        ctx.fillStyle = p.color.replace(/[\d.]+\)$/, '0.04)');
         ctx.fill();
       }
 
@@ -124,7 +124,7 @@ export default function AnimatedBackground() {
         height: '100%',
         pointerEvents: 'none',
         zIndex: -1,
-        opacity: 0.35,
+        opacity: 0.25,
       }}
     />
   );

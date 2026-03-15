@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { getDocuments } from '../services/api';
+import TiltCard from './TiltCard';
 
 export default function DocumentSelector({ documents, selectedDocs, onSelectionChange }) {
     const [isCollapsed, setIsCollapsed] = useState(false);
@@ -17,7 +18,7 @@ export default function DocumentSelector({ documents, selectedDocs, onSelectionC
     if (!documents || documents.length === 0) return null;
 
     return (
-        <div className="doc-selector">
+        <TiltCard className="doc-selector">
             <button
                 className="doc-selector-toggle"
                 onClick={() => setIsCollapsed(!isCollapsed)}
@@ -61,6 +62,6 @@ export default function DocumentSelector({ documents, selectedDocs, onSelectionC
                     )}
                 </div>
             )}
-        </div>
+        </TiltCard>
     );
 }

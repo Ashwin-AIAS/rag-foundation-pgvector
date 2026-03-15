@@ -11,6 +11,7 @@ import Toast from './components/Toast';
 import AnimatedBackground from './components/AnimatedBackground';
 import CyberCursor from './components/CyberCursor';
 import CommandPalette from './components/CommandPalette';
+import TiltCard from './components/TiltCard';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const containerVariants = {
@@ -331,10 +332,11 @@ function App() {
         {/* Left Column: Main Content (Files + Q&A) */}
         <motion.main variants={itemVariants} className="flex-1 flex flex-col min-w-0 h-full overflow-hidden relative z-0 p-4">
           <div className="flex-none py-5 sm:py-7 text-center" style={{ borderBottom: '0.5px solid rgba(255,255,255,0.08)' }}>
-            <h1 className="font-display font-bold tracking-[-0.04em]" style={{ fontSize: 'clamp(26px,4vw,38px)', color: '#f5f5f7', letterSpacing: '-0.04em' }}>
-              RAG TERMINAL
+            <h1 className="font-display font-bold tracking-[-0.04em] flex justify-center gap-[0.25em]" style={{ fontSize: 'clamp(26px,4vw,38px)', color: '#f5f5f7', letterSpacing: '-0.04em' }}>
+              <span className="overflow-hidden inline-block pb-1"><motion.span className="inline-block" initial={{ y: '100%' }} animate={{ y: 0 }} transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}>RAG</motion.span></span>
+              <span className="overflow-hidden inline-block pb-1"><motion.span className="inline-block" initial={{ y: '100%' }} animate={{ y: 0 }} transition={{ duration: 0.8, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}>TERMINAL</motion.span></span>
             </h1>
-            <p className="apple-caption mt-2">
+            <p className="apple-caption mt-2" style={{ animation: 'apple-fade-in 1s ease 0.4s both' }}>
               Advanced Document Analysis System
             </p>
             <button
@@ -371,9 +373,16 @@ function App() {
                         {uploadedFiles.length}
                       </span>
                     </div>
-                    <ul className="space-y-2 max-h-[300px] overflow-y-auto pr-1 custom-scrollbar">
+                    <motion.ul 
+                      initial="hidden" animate="visible"
+                      variants={{ visible: { transition: { staggerChildren: 0.05 } } }}
+                      className="space-y-2 max-h-[300px] overflow-y-auto pr-1 custom-scrollbar"
+                    >
                       {uploadedFiles.map((file, index) => (
-                        <li key={index} className="group flex items-center justify-between p-3 rounded-xl transition-all duration-200" style={{ background: 'rgba(255,255,255,0.02)', border: '0.5px solid transparent' }} onMouseEnter={(e) => e.currentTarget.style.borderColor='rgba(255,255,255,0.1)'} onMouseLeave={(e) => e.currentTarget.style.borderColor='transparent'}>
+                        <motion.li 
+                          key={index} 
+                          variants={{ hidden: { opacity: 0, x: -16 }, visible: { opacity: 1, x: 0, transition: { type: 'spring', stiffness: 300, damping: 25 } } }}
+                          className="group flex items-center justify-between p-3 rounded-xl transition-all duration-200" style={{ background: 'rgba(255,255,255,0.02)', border: '0.5px solid transparent' }} onMouseEnter={(e) => e.currentTarget.style.borderColor='rgba(255,255,255,0.1)'} onMouseLeave={(e) => e.currentTarget.style.borderColor='transparent'}>
                           <span className="text-sm truncate max-w-[180px] transition-colors" style={{ color: 'rgba(245,245,247,0.65)' }}>
                             {file}
                           </span>
@@ -386,9 +395,9 @@ function App() {
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                             </svg>
                           </button>
-                        </li>
+                        </motion.li>
                       ))}
-                    </ul>
+                    </motion.ul>
                   </div>
                 )}
               </div>
@@ -408,18 +417,19 @@ function App() {
                     {(currentAnswer || isQuerying) && (
                       <motion.div
                         key={currentAnswer?.question || 'loading'}
-                        variants={itemVariants}
-                        initial="hidden"
-                        animate="visible"
-                        exit={{ opacity: 0, y: -10, transition: { duration: 0.2 } }}
+                        initial={{ clipPath: 'inset(0 0 100% 0)' }}
+                        animate={{ clipPath: 'inset(0 0 0% 0)', transition: { duration: 0.7, ease: [0.16, 1, 0.3, 1] } }}
+                        exit={{ clipPath: 'inset(0 0 100% 0)', opacity: 0, transition: { duration: 0.3 } }}
                       >
-                        <AnswerDisplay
-                          answer={currentAnswer}
-                          isLoading={isQuerying}
-                          isThinking={isThinking}
-                          isStreaming={isStreaming}
-                          confidence={confidence}
-                        />
+                        <TiltCard>
+                          <AnswerDisplay
+                            answer={currentAnswer}
+                            isLoading={isQuerying}
+                            isThinking={isThinking}
+                            isStreaming={isStreaming}
+                            confidence={confidence}
+                          />
+                        </TiltCard>
                       </motion.div>
                     )}
                   </AnimatePresence>
