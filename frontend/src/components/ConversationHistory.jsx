@@ -15,47 +15,30 @@ import { motion, AnimatePresence } from 'framer-motion';
  */
 export default function ConversationHistory({ history, onClearHistory }) {
     return (
-        <div className="flex flex-col h-full" style={{ background: '#161617' }}>
-            <div className="flex items-center justify-between p-4" style={{ borderBottom: '0.5px solid rgba(255,255,255,0.08)' }}>
-                <h3 className="apple-caption flex items-center gap-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="rgba(245,245,247,0.35)">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    LOGS ({history.length})
+        <div style={{ background: '#130c06', display: 'flex', flexDirection: 'column', height: '100%' }}>
+            <div style={{ borderBottom: '1px solid rgba(192,57,27,0.15)', padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(10,6,2,0.5)' }}>
+                <h3 className="hud-title flex items-center gap-2">
+                    // MISSION_LOGS ({history.length}) //
                 </h3>
 
                 {history.length > 0 && (
                     <button
                         onClick={onClearHistory}
-                        className="apple-btn apple-btn-ghost px-3 py-1 text-[11px]" style={{ borderRadius: '7px' }}
+                        className="im-btn im-btn-ghost" style={{ fontSize: 9, padding: '4px 12px' }}
                         title="Clear Logs"
                     >
-                        Clear
+                        PURGE
                     </button>
                 )}
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
                 {history.length === 0 ? (
-                    <motion.div
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ delay: 0.3, duration: 0.4 }}
-                        className="flex flex-col items-center justify-center h-48 gap-2"
-                    >
-                        <motion.div
-                            animate={{ opacity: [0.3, 0.7, 0.3] }}
-                            transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
-                        >
-                            <svg width="32" height="32" viewBox="0 0 32 32" fill="none" className="mb-3 opacity-40">
-                                <circle cx="16" cy="16" r="12" stroke="#f5f5f7" strokeWidth="1" strokeDasharray="4 4"/>
-                                <circle cx="16" cy="16" r="6" stroke="#f5f5f7" strokeWidth="1" opacity="0.5"/>
-                                <circle cx="16" cy="16" r="2" fill="#f5f5f7" opacity="0.6"/>
-                            </svg>
-                        </motion.div>
-                        <p className="apple-caption">No queries yet</p>
-                        <p className="apple-caption" style={{ opacity: 0.4 }}>Ask a question to see your history</p>
-                    </motion.div>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 180, gap: 8 }}>
+                        <div style={{ fontSize: 28, opacity: 0.1, fontFamily: 'Orbitron, sans-serif', fontWeight: 900 }}>◈</div>
+                        <p className="hud-label">NO MISSION DATA</p>
+                        <p style={{ fontFamily: 'Share Tech Mono, monospace', fontSize: 11, color: 'rgba(255,212,184,0.25)' }}>// execute query to initialize logs //</p>
+                    </div>
                 ) : (
                     <div className="space-y-3">
                         <AnimatePresence>
@@ -68,7 +51,7 @@ export default function ConversationHistory({ history, onClearHistory }) {
             </div>
 
             {history.length >= 50 && (
-                <div className="apple-caption text-center py-2" style={{ borderTop: '0.5px solid rgba(255,255,255,0.08)', opacity: 0.5 }}>
+                <div className="hud-label text-center py-2" style={{ borderTop: '1px solid rgba(192,57,27,0.1)', opacity: 0.5 }}>
                     Buffer Limit Reached: Auto-archiving oldest entries
                 </div>
             )}

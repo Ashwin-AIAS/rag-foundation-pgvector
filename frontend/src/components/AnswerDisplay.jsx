@@ -212,7 +212,7 @@ function SynapseLoader() {
 
       <div className="flex items-center gap-2">
         <span
-          className="apple-caption"
+          className="hud-label"
           style={{ animation: 'synapse-text-pulse 1.8s ease-in-out infinite' }}
         >
           Neural Processing
@@ -276,7 +276,7 @@ export default function AnswerDisplay({ answer, isLoading, isThinking, isStreami
                         <line x1="10" y1="14" x2="22" y2="14" stroke="rgba(245,245,247,0.12)" strokeWidth="1"/>
                         <line x1="10" y1="18" x2="18" y2="18" stroke="rgba(245,245,247,0.12)" strokeWidth="1"/>
                     </svg>
-                    <p className="apple-caption">Upload a document and ask a question</p>
+                    <p className="hud-label">Upload a document and ask a question</p>
                 </div>
             </div>
         );

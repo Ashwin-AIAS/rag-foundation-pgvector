@@ -97,7 +97,7 @@ export default function FeedbackButtons({ question, answer, numChunksRetrieved, 
             </div>
 
             {feedbackGiven && (
-                <div className="apple-caption animate-pulse font-mono">
+                <div className="hud-label animate-pulse font-mono">
                     FEEDBACK_LOGGED_SUCCESSFULLY
                 </div>
             )}

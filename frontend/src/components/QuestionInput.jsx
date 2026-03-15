@@ -24,7 +24,7 @@ function QuestionInput({ onQueryStart, disabled, isLoading }) {
                         value={mode}
                         onChange={(e) => setMode(e.target.value)}
                         disabled={disabled || isLoading}
-                        className="apple-select"
+                        className="jarvis-select"
                     >
                         <option value="hybrid"> Hybrid Search</option>
                         <option value="vector"> Vector Only</option>
@@ -33,45 +33,39 @@ function QuestionInput({ onQueryStart, disabled, isLoading }) {
                 </div>
                 
                 <motion.div
+                    animate={{ boxShadow: question.length > 0 ? '0 0 12px rgba(192,57,27,0.3)' : 'none' }}
+                    transition={{ duration: 0.3 }}
                     className="relative flex-1"
                 >
                     <input
                         type="text"
                         value={question}
                         onChange={(e) => setQuestion(e.target.value)}
-                        placeholder={disabled ? '> Upload documents to begin...' : '> Ask anything about your documents...'}
+                        placeholder={disabled ? '// OFFLINE — UPLOAD DATA TO ACTIVATE //' : '// ENTER QUERY FOR JARVIS...'}
                         disabled={disabled || isLoading}
-                        className="apple-input breathing-input"
+                        className="jarvis-input"
                     />
                     {isLoading && (
-                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                            <div className="w-4 h-4 rounded-full animate-spin" style={{ border: '1.5px solid rgba(245,245,247,0.15)', borderTopColor: '#f5f5f7' }}></div>
+                        <div className="arc-reactor" style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)' }}>
+                            <div className="arc-reactor-ring" style={{ width: 18, height: 18 }}></div>
+                            <div className="arc-reactor-core" style={{ width: 6, height: 6 }}></div>
                         </div>
                     )}
                 </motion.div>
 
                 <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.97 }}
+                    whileHover={!disabled && !isLoading && question.trim() ? { scale: 1.03, y: -1 } : {}}
+                    whileTap={!disabled && !isLoading && question.trim() ? { scale: 0.97 } : {}}
                     transition={{ type: 'spring', stiffness: 400, damping: 20 }}
                     type="submit"
                     disabled={disabled || isLoading || !question.trim()}
-                    data-cursor-hover="true"
                     className={
                       disabled || isLoading || !question.trim()
-                        ? 'apple-btn apple-btn-primary opacity-30 cursor-not-allowed'
-                        : 'apple-btn apple-btn-primary'
+                        ? 'im-btn im-btn-primary opacity-30 cursor-not-allowed'
+                        : 'im-btn im-btn-primary'
                     }
                 >
-                    {isLoading ? (
-                        <span className="flex items-center gap-2">
-                            <svg className="animate-spin w-3 h-3" viewBox="0 0 24 24" fill="none">
-                                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeOpacity="0.25"/>
-                                <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round"/>
-                            </svg>
-                            <span className="shimmer-text font-semibold">Analyzing...</span>
-                        </span>
-                    ) : 'Analyze'}
+                    {isLoading ? 'PROCESSING' : 'EXECUTE'}
                 </motion.button>
             </form>
         </div>

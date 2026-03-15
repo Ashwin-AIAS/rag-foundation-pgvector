@@ -147,7 +147,7 @@ export default function FileUpload({ onUploadSuccess }) {
     const statusColor = (status) => {
         if (status === 'COMPLETE') return 'text-green-400';
         if (status === 'FAILED') return 'text-red-400';
-        return 'text-[#f5f5f7]';
+        return 'text-[#ffd4b8]';
     };
 
     return (
@@ -179,7 +179,7 @@ export default function FileUpload({ onUploadSuccess }) {
                 ))}
             </AnimatePresence>
             <TiltCard
-                className={`apple-upload-zone p-8 text-center ${isDragging ? 'drag-over' : ''} ${isUploading ? 'opacity-40 pointer-events-none' : ''}`}
+                className={`im-upload-zone p-8 text-center ${isDragging ? 'drag-over' : ''} ${isUploading ? 'opacity-40 pointer-events-none' : ''}`}
             >
                 <input
                     type="file"
@@ -195,34 +195,37 @@ export default function FileUpload({ onUploadSuccess }) {
                     htmlFor="file-upload"
                     className="flex flex-col items-center justify-center cursor-pointer h-full"
                 >
-                    <div className="w-14 h-14 mb-4 rounded-2xl flex items-center justify-center transition-all duration-200" style={{ background: 'rgba(255,255,255,0.06)', color: 'rgba(245,245,247,0.5)' }}>
+                    <div style={{ width: 56, height: 56, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16, background: 'rgba(192,57,27,0.1)', border: '1px solid rgba(192,57,27,0.2)', color: 'rgba(232,130,74,0.7)', clipPath: 'polygon(6px 0%,100% 0%,calc(100% - 6px) 100%,0% 100%)' }}>
                         {isUploading ? (
-                            <div className="w-7 h-7 rounded-full animate-spin" style={{ border: '1.5px solid rgba(245,245,247,0.1)', borderTopColor: '#f5f5f7' }}></div>
+                            <div className="arc-reactor">
+                                <div className="arc-reactor-ring" style={{ width: 32, height: 32 }}></div>
+                                <div className="arc-reactor-core" style={{ width: 10, height: 10 }}></div>
+                            </div>
                         ) : (
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" style={{ color: 'rgba(245,245,247,0.45)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" style={{ color: 'rgba(232,130,74,0.7)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                             </svg>
                         )}
                     </div>
 
-                    <p className="text-[15px] font-semibold mb-1 tracking-[-0.01em]" style={{ color: '#f5f5f7' }}>
-                        {isUploading ? 'Uploading...' : 'Drop files to upload'}
+                    <p style={{ fontFamily: "'Orbitron', sans-serif", fontWeight: 700, fontSize: 13, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#ffd4b8', marginBottom: 4 }}>
+                        {isUploading ? '// TRANSMITTING //' : '// INITIATE DATA UPLOAD //'}
                     </p>
-                    <p className="apple-caption">
-                        PDF, DOCX, TXT, CSV, Excel
+                    <p className="hud-label mt-1">
+                        PDF · DOCX · TXT · CSV · EXCEL
                     </p>
                 </label>
             </TiltCard>
 
             {isUploading && (
                <div className="mt-4 px-1">
-                 <div className="flex justify-between apple-caption mb-2">
-                   <span>Uploading</span>
+                 <div className="flex justify-between hud-label mb-2">
+                   <span>TRANSMITTING</span>
                    <span>{uploadProgress}%</span>
                  </div>
-                 <div className="apple-progress-track">
+                 <div className="im-progress-track">
                    <motion.div
-                     className="h-full rounded-full" style={{ background: '#f5f5f7' }}
+                     className="im-progress-fill" style={{ height: '100%' }}
                      initial={{ width: 0 }}
                      animate={{ width: `${uploadProgress}%` }}
                      transition={{ duration: 0.15 }}
@@ -250,12 +253,11 @@ export default function FileUpload({ onUploadSuccess }) {
                 <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="mt-4 p-3 rounded-xl border text-[13px] flex items-center gap-2"
-                    style={{
-                        background: 'rgba(255,255,255,0.04)',
-                        border: '0.5px solid rgba(255,255,255,0.12)',
-                        color: message.type === 'success' ? 'rgba(245,245,247,0.8)' : 'rgba(245,245,247,0.5)'
-                    }}
+                    style={
+                        message.type === 'success' 
+                          ? { background: 'rgba(192,57,27,0.08)', border: '1px solid rgba(192,57,27,0.25)', color: 'var(--im-orange)', fontFamily: '"Share Tech Mono", monospace', fontSize: 12, padding: '10px 14px', marginTop: 12, display: 'flex', gap: 8, alignItems: 'center' }
+                          : { background: 'rgba(192,57,27,0.08)', border: '1px solid rgba(192,57,27,0.25)', color: 'rgba(255,212,184,0.5)', fontFamily: '"Share Tech Mono", monospace', fontSize: 12, padding: '10px 14px', marginTop: 12, display: 'flex', gap: 8, alignItems: 'center' }
+                    }
                 >
                     <span>{message.type === 'success' ? '✓' : '⚠'}</span>
                     {message.text}

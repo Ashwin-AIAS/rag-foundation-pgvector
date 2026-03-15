@@ -40,28 +40,28 @@ export default function HistoryItem({ item }) {
             initial={{ opacity: 0, y: 20, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -20, scale: 0.95 }}
-            transition={{ type: 'spring', stiffness: 420, damping: 30 }}
-            whileHover={{ x: 3, transition: { type: 'spring', stiffness: 500, damping: 25 } }}
-            className="group rounded-xl cursor-pointer overflow-hidden transition-all duration-200"
+            transition={{ type: 'spring', stiffness: 500, damping: 35 }}
             style={{
-                background: isExpanded ? '#1d1d1f' : 'rgba(255,255,255,0.02)',
-                border: `0.5px solid ${isExpanded ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.06)'}`,
+                background: isExpanded ? '#1e1108' : 'rgba(192,57,27,0.03)',
+                border: `1px solid ${isExpanded ? 'rgba(232,130,74,0.35)' : 'rgba(192,57,27,0.12)'}`,
+                marginBottom: 4, cursor: 'pointer', transition: 'all 0.2s',
+                clipPath: 'polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px))'
             }}
             onClick={toggleExpanded}
         >
             <div className="p-3">
                 <div className="flex justify-between items-start gap-2 mb-1">
-                    <div className="font-medium text-[13px] line-clamp-2 transition-colors" style={{ color: isExpanded ? '#f5f5f7' : 'rgba(245,245,247,0.7)', letterSpacing: '-0.01em' }}>
-                        {item.isRefusal && <span className="apple-caption px-2 py-0.5 rounded-md" style={{ background: 'rgba(255,255,255,0.05)', border: '0.5px solid rgba(255,255,255,0.1)' }} title="Request refused">⚠️</span>}
+                    <div style={{ fontFamily: 'Share Tech Mono, monospace', fontSize: 12, color: isExpanded ? '#ffd4b8' : 'rgba(255,212,184,0.65)', lineHeight: 1.5 }}>
+                        {item.isRefusal && <span className="hud-label px-2 py-0.5 rounded-md" style={{ background: 'rgba(192,57,27,0.1)', border: '1px solid rgba(192,57,27,0.2)' }} title="Request refused">⚠️</span>}
                         {item.question}
                     </div>
-                    <div className="apple-caption flex-shrink-0 mt-0.5">
+                    <div className="hud-label flex-shrink-0 mt-0.5">
                         {formatTimestamp(item.timestamp)}
                     </div>
                 </div>
 
                 {!isExpanded && (
-                    <div className="text-[13px] leading-relaxed line-clamp-1 pl-2 border-l border-white/10" style={{ color: 'rgba(245,245,247,0.65)', letterSpacing: '-0.01em' }}>
+                    <div className="line-clamp-1 pl-2" style={{ fontFamily: 'Share Tech Mono, monospace', fontSize: 12, color: 'rgba(255,212,184,0.65)', borderLeft: '1px solid rgba(192,57,27,0.15)' }}>
                         {item.answer}
                     </div>
                 )}
@@ -78,27 +78,27 @@ export default function HistoryItem({ item }) {
                         className="border-t px-3 py-3 text-xs"
                     >
                         <div className="mb-3">
-                            <strong className="block apple-caption mb-1">Response Protocol:</strong>
-                            <p className="text-[13px] leading-relaxed whitespace-pre-wrap border-l border-white/10 pl-2" style={{ color: 'rgba(245,245,247,0.65)', letterSpacing: '-0.01em' }}>
+                            <strong className="block hud-label mb-1">Response Protocol:</strong>
+                            <p style={{ fontFamily: 'Share Tech Mono, monospace', fontSize: 12, color: 'rgba(255,212,184,0.7)', lineHeight: 1.65, marginTop: 8, paddingTop: 8, borderTop: '1px solid rgba(192,57,27,0.1)' }}>
                                 {item.answer}
                             </p>
                         </div>
 
                         {item.num_chunks_retrieved > 0 && item.retrieved_chunks && (
-                            <div className="mt-3 pt-2 border-t border-white/5">
-                                <strong className="apple-caption mt-1 block mb-2">
+                            <div className="mt-3 pt-2 border-t" style={{ borderColor: 'rgba(192,57,27,0.1)' }}>
+                                <strong className="hud-label mt-1 block mb-2">
                                     References ({item.num_chunks_retrieved}):
                                 </strong>
                                 <div className="space-y-2">
                                     {item.retrieved_chunks.map((chunk, index) => (
-                                        <div key={index} className="bg-black/40 rounded p-2 border border-white/5">
+                                        <div key={index} className="rounded p-2" style={{ background: 'rgba(192,57,27,0.06)', border: '1px solid rgba(192,57,27,0.15)' }}>
                                             <div className="flex justify-between items-center mb-1 text-[10px]">
-                                                <span className="text-[#f5f5f7] truncate max-w-[70%]">{chunk.source_file}</span>
-                                                <span className="text-white/30 font-mono">
+                                                <span className="truncate max-w-[70%]" style={{ color: 'var(--im-cream)' }}>{chunk.source_file}</span>
+                                                <span className="font-mono" style={{ color: 'var(--im-orange)' }}>
                                                     {(chunk.similarity_score * 100).toFixed(0)}%
                                                 </span>
                                             </div>
-                                            <div className="text-white/50 line-clamp-2 italic">
+                                            <div className="line-clamp-2 italic" style={{ color: 'rgba(255,212,184,0.5)' }}>
                                                 "{chunk.chunk_text}"
                                             </div>
                                         </div>

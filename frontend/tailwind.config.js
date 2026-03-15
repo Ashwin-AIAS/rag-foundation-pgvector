@@ -1,74 +1,61 @@
 /** @type {import('tailwindcss').Config} */
 export default {
-  content: [
-    "./index.html",
-    "./src/**/*.{js,ts,jsx,tsx}",
-  ],
+  content: ["./index.html","./src/**/*.{js,ts,jsx,tsx}"],
   theme: {
     extend: {
       fontFamily: {
-        sans: ['-apple-system', 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', 'Arial', 'sans-serif'],
-        display: ['-apple-system', 'SF Pro Display', 'Helvetica Neue', 'sans-serif'],
-        mono: ['SF Mono', 'ui-monospace', 'Menlo', 'Monaco', 'monospace'],
+        sans:    ["'Share Tech Mono'", 'monospace'],
+        display: ["'Orbitron'", 'sans-serif'],
+        mono:    ["'Share Tech Mono'", 'monospace'],
       },
       colors: {
-        apple: {
-          black:    '#000000',
-          s1:       '#161617',
-          s2:       '#1d1d1f',
-          s3:       '#2d2d2f',
-          s4:       '#3a3a3c',
-          white:    '#f5f5f7',
-          mid:      'rgba(245,245,247,0.6)',
-          muted:    'rgba(245,245,247,0.35)',
-          faint:    'rgba(245,245,247,0.12)',
-          border:   'rgba(255,255,255,0.10)',
-          borderHv: 'rgba(255,255,255,0.20)',
-          pure:     '#ffffff',
+        im: {
+          void:    '#0a0602',
+          s1:      '#130c06',
+          s2:      '#1e1108',
+          s3:      '#2d1a0a',
+          s4:      '#3d2510',
+          crimson: '#c0391b',
+          orange:  '#e8824a',
+          gold:    '#f5a623',
+          cream:   '#ffd4b8',
         },
-      },
-      borderColor: {
-        DEFAULT: 'rgba(255,255,255,0.10)',
-      },
-      fontSize: {
-        '2xs': ['10px', { lineHeight: '1.4', letterSpacing: '0.08em' }],
-      },
-      letterSpacing: {
-        apple:    '-0.04em',
-        appleSm:  '-0.02em',
-        appleWide: '0.06em',
       },
       boxShadow: {
-        'apple-sm':  '0 1px 3px rgba(0,0,0,0.6)',
-        'apple-md':  '0 4px 16px rgba(0,0,0,0.6)',
-        'apple-lg':  '0 8px 32px rgba(0,0,0,0.7)',
-        'apple-xl':  '0 20px 60px rgba(0,0,0,0.8)',
+        'arc-sm':  '0 0 8px rgba(192,57,27,0.4), 0 0 2px rgba(232,130,74,0.3)',
+        'arc-md':  '0 0 20px rgba(192,57,27,0.35), 0 0 8px rgba(232,130,74,0.2)',
+        'arc-lg':  '0 0 40px rgba(192,57,27,0.3), 0 0 15px rgba(232,130,74,0.15)',
+        'arc-xl':  '0 0 60px rgba(192,57,27,0.25), 0 20px 40px rgba(0,0,0,0.8)',
+        'arc-inset': 'inset 0 0 20px rgba(192,57,27,0.08)',
       },
       animation: {
-        'apple-fade-up':   'apple-fade-up 0.5s cubic-bezier(0.25,0.46,0.45,0.94) forwards',
-        'apple-fade-in':   'apple-fade-in 0.35s ease forwards',
-        'apple-scale-in':  'apple-scale-in 0.3s cubic-bezier(0.34,1.56,0.64,1) forwards',
-        'apple-stagger-1': 'apple-fade-up 0.5s 0.05s cubic-bezier(0.25,0.46,0.45,0.94) forwards',
-        'apple-stagger-2': 'apple-fade-up 0.5s 0.12s cubic-bezier(0.25,0.46,0.45,0.94) forwards',
-        'apple-stagger-3': 'apple-fade-up 0.5s 0.20s cubic-bezier(0.25,0.46,0.45,0.94) forwards',
-        'progress-bar':    'progress-bar 1.6s ease-in-out infinite',
+        'hud-pulse':   'hud-pulse 2s ease-in-out infinite',
+        'arc-spin':    'arc-spin 3s linear infinite',
+        'hex-shift':   'hex-shift 8s ease-in-out infinite',
+        'scanline':    'scanline 6s linear infinite',
+        'data-stream': 'data-stream 1.4s ease-in-out infinite',
+        'corner-draw': 'corner-draw 0.4s ease-out forwards',
       },
       keyframes: {
-        'apple-fade-up': {
-          '0%':   { opacity: '0', transform: 'translateY(16px)' },
-          '100%': { opacity: '1', transform: 'translateY(0)' },
+        'hud-pulse': {
+          '0%,100%': { boxShadow: '0 0 8px rgba(192,57,27,0.4)' },
+          '50%':      { boxShadow: '0 0 25px rgba(192,57,27,0.8), 0 0 10px rgba(232,130,74,0.4)' },
         },
-        'apple-fade-in': {
-          '0%':   { opacity: '0' },
-          '100%': { opacity: '1' },
+        'arc-spin': {
+          '0%':   { transform: 'rotate(0deg)' },
+          '100%': { transform: 'rotate(360deg)' },
         },
-        'apple-scale-in': {
-          '0%':   { opacity: '0', transform: 'scale(0.94)' },
-          '100%': { opacity: '1', transform: 'scale(1)' },
+        'scanline': {
+          '0%':   { transform: 'translateY(-4px)' },
+          '100%': { transform: 'translateY(100vh)' },
         },
-        'progress-bar': {
-          '0%':   { transform: 'translateX(-100%)' },
-          '100%': { transform: 'translateX(400%)' },
+        'data-stream': {
+          '0%':   { strokeDashoffset: '200' },
+          '100%': { strokeDashoffset: '0' },
+        },
+        'corner-draw': {
+          '0%':   { opacity: '0', strokeDashoffset: '40' },
+          '100%': { opacity: '1', strokeDashoffset: '0' },
         },
       },
     },

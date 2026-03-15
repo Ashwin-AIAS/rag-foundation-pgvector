@@ -12,20 +12,20 @@ export default function AnimatedBackground() {
     let h = canvas.height = window.innerHeight;
     let raf;
 
-    const PARTICLE_COUNT = 60;
-    const CONNECT_DIST = 130;
+    const PARTICLE_COUNT = 50;
+    const CONNECT_DIST = 120;
     const COLORS = [
-      'rgba(255,255,255,0.4)',
-      'rgba(255,255,255,0.15)',
-      'rgba(255,255,255,0.25)',
+      'rgba(192,57,27,0.7)',
+      'rgba(232,130,74,0.5)',
+      'rgba(245,166,35,0.4)',
     ];
 
     const particles = Array.from({ length: PARTICLE_COUNT }, () => ({
       x: Math.random() * w,
       y: Math.random() * h,
-      vx: (Math.random() - 0.5) * 0.15,
-      vy: (Math.random() - 0.5) * 0.15,
-      r: (Math.random() * 1.5) + 0.5,
+      vx: (Math.random() - 0.5) * 0.20,
+      vy: (Math.random() - 0.5) * 0.20,
+      r: (Math.random() * 1.4) + 0.5,
       color: COLORS[Math.floor(Math.random() * COLORS.length)],
     }));
 
@@ -61,7 +61,7 @@ export default function AnimatedBackground() {
 
         // Speed cap
         const speed = Math.sqrt(p.vx*p.vx + p.vy*p.vy);
-        if (speed > 1.2) { p.vx = (p.vx/speed)*1.2; p.vy = (p.vy/speed)*1.2; }
+        if (speed > 0.6) { p.vx = (p.vx/speed)*0.6; p.vy = (p.vy/speed)*0.6; }
 
         p.x += p.vx;
         p.y += p.vy;
@@ -81,8 +81,8 @@ export default function AnimatedBackground() {
           if (ed < CONNECT_DIST) {
             const alpha = (1 - ed / CONNECT_DIST) * 0.15;
             ctx.beginPath();
-            ctx.strokeStyle = `rgba(255,255,255,${alpha})`;
-            ctx.lineWidth = 0.6;
+            ctx.strokeStyle = `rgba(192,57,27,${alpha * 0.5})`;
+            ctx.lineWidth = 0.4;
             ctx.moveTo(p.x, p.y);
             ctx.lineTo(q.x, q.y);
             ctx.stroke();
@@ -98,7 +98,7 @@ export default function AnimatedBackground() {
         // Glow (barely visible)
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.r + 2, 0, Math.PI * 2);
-        ctx.fillStyle = p.color.replace(/[\d.]+\)$/, '0.04)');
+        ctx.fillStyle = p.color.replace(/[\d.]+\)$/, '0.06)');
         ctx.fill();
       }
 
@@ -124,7 +124,7 @@ export default function AnimatedBackground() {
         height: '100%',
         pointerEvents: 'none',
         zIndex: -1,
-        opacity: 0.25,
+        opacity: 0.5,
       }}
     />
   );

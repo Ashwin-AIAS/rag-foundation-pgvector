@@ -307,7 +307,7 @@ function App() {
   }, [handleQueryStart]);
 
   return (
-    <div className="h-full w-full flex flex-col overflow-hidden" style={{ background: '#000000', color: '#f5f5f7' }}>
+    <div className="h-full w-full flex flex-col overflow-hidden" style={{ background: '#0a0602', color: '#ffd4b8', fontFamily: "'Share Tech Mono', monospace" }}>
       <CyberCursor />
       <CommandPalette
         isOpen={cmdPaletteOpen}
@@ -331,18 +331,17 @@ function App() {
 
         {/* Left Column: Main Content (Files + Q&A) */}
         <motion.main variants={itemVariants} className="flex-1 flex flex-col min-w-0 h-full overflow-hidden relative z-0 p-4">
-          <div className="flex-none py-5 sm:py-7 text-center" style={{ borderBottom: '0.5px solid rgba(255,255,255,0.08)' }}>
-            <h1 className="font-display font-bold tracking-[-0.04em] flex justify-center gap-[0.25em]" style={{ fontSize: 'clamp(26px,4vw,38px)', color: '#f5f5f7', letterSpacing: '-0.04em' }}>
-              <span className="overflow-hidden inline-block pb-1"><motion.span className="inline-block" initial={{ y: '100%' }} animate={{ y: 0 }} transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}>RAG</motion.span></span>
-              <span className="overflow-hidden inline-block pb-1"><motion.span className="inline-block" initial={{ y: '100%' }} animate={{ y: 0 }} transition={{ duration: 0.8, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}>TERMINAL</motion.span></span>
+          <div className="flex-none py-5 sm:py-7 text-center" style={{ borderBottom: '1px solid rgba(192,57,27,0.2)', background: 'rgba(19,12,6,0.8)', backdropFilter: 'blur(8px)', padding: '16px 0' }}>
+            <h1 style={{ fontFamily: "'Orbitron', sans-serif", fontWeight: 900, fontSize: 'clamp(22px,3.5vw,34px)', letterSpacing: '0.1em', textTransform: 'uppercase', background: 'linear-gradient(135deg, #ffd4b8 0%, #e8824a 40%, #c0391b 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
+              RAG TERMINAL
             </h1>
-            <p className="apple-caption mt-2" style={{ animation: 'apple-fade-in 1s ease 0.4s both' }}>
-              Advanced Document Analysis System
+            <p className="hud-label mt-2">
+              // ADVANCED DOCUMENT ANALYSIS SYSTEM //
             </p>
             <button
               onClick={() => setCmdPaletteOpen(true)}
               data-cursor-hover="true"
-              className="mt-2 apple-caption apple-btn apple-btn-ghost px-3 py-1 text-[10px]"
+              className="im-btn im-btn-ghost mt-2 text-[9px]"
             >
               ⌘K command palette
             </button>
@@ -363,11 +362,10 @@ function App() {
                 />
 
                 {uploadedFiles.length > 0 && (
-                  <div className="apple-card p-4">
+                  <div className="hud-card p-4">
                     <div className="flex items-center justify-between mb-4 border-b border-white/10 pb-2">
-                      <h3 className="apple-caption flex items-center gap-2">
-                        <span className="w-1.5 h-1.5 rounded-full" style={{ background: 'rgba(245,245,247,0.4)' }}></span>
-                        DATA_MODULES
+                      <h3 className="hud-title flex items-center gap-2">
+                        // DATA_MODULES //
                       </h3>
                       <span className="doc-selector-badge">
                         {uploadedFiles.length}
@@ -382,13 +380,13 @@ function App() {
                         <motion.li 
                           key={index} 
                           variants={{ hidden: { opacity: 0, x: -16 }, visible: { opacity: 1, x: 0, transition: { type: 'spring', stiffness: 300, damping: 25 } } }}
-                          className="group flex items-center justify-between p-3 rounded-xl transition-all duration-200" style={{ background: 'rgba(255,255,255,0.02)', border: '0.5px solid transparent' }} onMouseEnter={(e) => e.currentTarget.style.borderColor='rgba(255,255,255,0.1)'} onMouseLeave={(e) => e.currentTarget.style.borderColor='transparent'}>
-                          <span className="text-sm truncate max-w-[180px] transition-colors" style={{ color: 'rgba(245,245,247,0.65)' }}>
+                          className="group flex items-center justify-between transition-all duration-200" style={{ background: 'rgba(192,57,27,0.04)', borderLeft: '1px solid rgba(192,57,27,0.15)', marginBottom: '3px', padding: '8px 12px', fontFamily: "'Share Tech Mono', monospace", fontSize: '12px' }} onMouseEnter={(e) => e.currentTarget.style.borderLeftColor='var(--im-orange)'} onMouseLeave={(e) => e.currentTarget.style.borderLeftColor='rgba(192,57,27,0.15)'}>
+                          <span className="truncate max-w-[180px] transition-colors" style={{ color: 'rgba(255,212,184,0.65)' }}>
                             {file}
                           </span>
                           <button
                             onClick={() => handleDelete(file)}
-                            className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg transition-all duration-200" style={{ color: 'rgba(245,245,247,0.4)' }}
+                            className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg transition-all duration-200" style={{ color: 'var(--im-muted)' }} onMouseEnter={(e)=>e.currentTarget.style.color='var(--im-crimson)'} onMouseLeave={(e)=>e.currentTarget.style.color='var(--im-muted)'}
                             title="Delete Protocol"
                           >
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -441,7 +439,7 @@ function App() {
         </motion.main>
 
         {/* Right Column: Logs Panel (Sidebar) */}
-        <motion.aside variants={itemVariants} className="w-full lg:w-[260px] xl:w-[280px] flex-none h-[40vh] lg:h-full overflow-hidden z-20" style={{ borderTop: '0.5px solid rgba(255,255,255,0.08)', borderLeft: '0.5px solid rgba(255,255,255,0.08)', background: '#161617' }}>
+        <motion.aside variants={itemVariants} className="w-full lg:w-[260px] xl:w-[280px] flex-none h-[40vh] lg:h-full overflow-hidden z-20" style={{ borderLeft: '1px solid rgba(192,57,27,0.15)', background: '#130c06' }}>
           <ConversationHistory
             history={conversationHistory}
             onClearHistory={handleClearHistory}
@@ -451,8 +449,8 @@ function App() {
 
       </motion.div>
 
-      <footer className="fixed bottom-0 left-0 w-full text-center py-1 pointer-events-none z-50 apple-caption" style={{ opacity: 0.25 }}>
-        SYSTEM_VERSION_2.0 // CYBER_CORE_INIT // RAG_BACKEND_CONNECTED
+      <footer className="fixed bottom-0 left-0 w-full text-center pointer-events-none z-50" style={{ fontFamily: "'Orbitron', sans-serif", fontSize: '9px', letterSpacing: '0.16em', color: 'rgba(255,212,184,0.2)', borderTop: '1px solid rgba(192,57,27,0.1)', padding: '6px 0' }}>
+        // MARK_L · JARVIS_ONLINE · SYSTEMS_NOMINAL //
       </footer>
     </div>
   );

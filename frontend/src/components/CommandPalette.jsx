@@ -61,9 +61,9 @@ export default function CommandPalette({ isOpen, onClose, conversationHistory = 
   }, [handleKey]);
 
   const typeIcon = (type) => {
-    if (type === 'query')  return <span style={{ color: '#f5f5f7', fontSize: 12 }}>›</span>;
-    if (type === 'doc')    return <span style={{ color: 'rgba(245,245,247,0.55)', fontSize: 12 }}>◈</span>;
-    if (type === 'action') return <span style={{ color: 'rgba(245,245,247,0.4)', fontSize: 12 }}>⚡</span>;
+    if (type === 'query')  return <span style={{ color: '#ffd4b8', fontSize: 12 }}>›</span>;
+    if (type === 'doc')    return <span style={{ color: 'rgba(255,212,184,0.55)', fontSize: 12 }}>◈</span>;
+    if (type === 'action') return <span style={{ color: 'rgba(255,212,184,0.4)', fontSize: 12 }}>⚡</span>;
     return null;
   };
 
@@ -90,15 +90,15 @@ export default function CommandPalette({ isOpen, onClose, conversationHistory = 
             onClick={e => e.stopPropagation()}
             style={{
               width: '100%', maxWidth: 560,
-              background: 'rgba(10,15,28,0.95)',
-              border: '1px solid rgba(245,245,247,0.3)',
+              background: 'rgba(19,12,6,0.95)',
+              border: '1px solid rgba(255,212,184,0.3)',
               borderRadius: 16, overflow: 'hidden',
-              boxShadow: '0 0 0 0.5px rgba(255,255,255,0.12), 0 25px 60px rgba(0,0,0,0.8)',
+              boxShadow: '0 0 0 0.5px rgba(232,130,74,0.12), 0 25px 60px rgba(0,0,0,0.8)',
             }}
           >
             {/* Search input */}
-            <div style={{ display: 'flex', alignItems: 'center', padding: '14px 16px', borderBottom: '1px solid rgba(245,245,247,0.1)', gap: 10 }}>
-              <span style={{ color: 'rgba(245,245,247,0.35)', fontFamily: 'JetBrains Mono', fontSize: 16 }}>⌘</span>
+            <div style={{ display: 'flex', alignItems: 'center', padding: '14px 16px', borderBottom: '1px solid rgba(255,212,184,0.1)', gap: 10 }}>
+              <span style={{ color: 'rgba(255,212,184,0.35)', fontFamily: 'Share Tech Mono, monospace', fontSize: 16 }}>⌘</span>
               <input
                 ref={inputRef}
                 value={query}
@@ -106,17 +106,17 @@ export default function CommandPalette({ isOpen, onClose, conversationHistory = 
                 placeholder="> type a command or search..."
                 style={{
                   flex: 1, background: 'transparent', border: 'none', outline: 'none',
-                  color: 'rgba(230,241,255,0.9)', fontFamily: 'JetBrains Mono, monospace',
+                  color: 'rgba(255,212,184,0.9)', fontFamily: 'Share Tech Mono, monospace',
                   fontSize: 14,
                 }}
               />
-              <kbd style={{ fontSize: 10, color: 'rgba(230,241,255,0.3)', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 4, padding: '2px 6px', fontFamily: 'JetBrains Mono' }}>ESC</kbd>
+              <kbd style={{ fontSize: 10, color: 'rgba(255,212,184,0.3)', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 4, padding: '2px 6px', fontFamily: 'Share Tech Mono, monospace' }}>ESC</kbd>
             </div>
 
             {/* Results */}
             <div style={{ maxHeight: 340, overflowY: 'auto', padding: '8px 0' }}>
               {filtered.length === 0 && (
-                <div style={{ padding: '24px', textAlign: 'center', color: 'rgba(230,241,255,0.3)', fontSize: 13, fontFamily: 'JetBrains Mono' }}>
+                <div style={{ padding: '24px', textAlign: 'center', color: 'rgba(255,212,184,0.3)', fontSize: 13, fontFamily: 'Share Tech Mono, monospace' }}>
                   No results for "{query}"
                 </div>
               )}
@@ -128,26 +128,26 @@ export default function CommandPalette({ isOpen, onClose, conversationHistory = 
                   style={{
                     display: 'flex', alignItems: 'center', gap: 12,
                     padding: '10px 16px', cursor: 'pointer',
-                    background: i === activeIndex ? 'rgba(255,255,255,0.05)' : 'transparent',
-                    borderLeft: i === activeIndex ? '2px solid rgba(245,245,247,0.4)' : '2px solid transparent',
+                    background: i === activeIndex ? 'rgba(255,212,184,0.05)' : 'transparent',
+                    borderLeft: i === activeIndex ? '2px solid rgba(255,212,184,0.4)' : '2px solid transparent',
                     transition: 'background 0.1s',
                   }}
                 >
                   <span style={{ width: 16, flexShrink: 0 }}>{typeIcon(item.type)}</span>
-                  <span style={{ flex: 1, fontSize: 13, color: 'rgba(230,241,255,0.85)', fontFamily: 'JetBrains Mono', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <span style={{ flex: 1, fontSize: 13, color: 'rgba(255,212,184,0.85)', fontFamily: 'Share Tech Mono, monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {item.label}
                   </span>
-                  <span style={{ fontSize: 10, color: 'rgba(230,241,255,0.3)', flexShrink: 0 }}>{item.meta}</span>
+                  <span style={{ fontSize: 10, color: 'rgba(255,212,184,0.3)', flexShrink: 0 }}>{item.meta}</span>
                 </motion.div>
               ))}
             </div>
 
             {/* Footer */}
-            <div style={{ padding: '8px 16px', borderTop: '1px solid rgba(245,245,247,0.08)', display: 'flex', gap: 16 }}>
+            <div style={{ padding: '8px 16px', borderTop: '1px solid rgba(255,212,184,0.08)', display: 'flex', gap: 16 }}>
               {[['↑↓','navigate'],['↵','select'],['esc','close']].map(([key, label]) => (
                 <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <kbd style={{ fontSize: 10, color: 'rgba(230,241,255,0.4)', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 4, padding: '1px 5px', fontFamily: 'JetBrains Mono' }}>{key}</kbd>
-                  <span style={{ fontSize: 10, color: 'rgba(230,241,255,0.25)' }}>{label}</span>
+                  <kbd style={{ fontSize: 10, color: 'rgba(255,212,184,0.4)', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 4, padding: '1px 5px', fontFamily: 'Share Tech Mono, monospace' }}>{key}</kbd>
+                  <span style={{ fontSize: 10, color: 'rgba(255,212,184,0.25)' }}>{label}</span>
                 </div>
               ))}
             </div>
