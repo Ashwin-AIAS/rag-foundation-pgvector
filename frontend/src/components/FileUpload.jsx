@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { uploadFile, pollIngestStatus } from '../services/api';
 import { motion, AnimatePresence } from 'framer-motion';
 import TiltCard from './TiltCard';
+import { towerAudio } from '../services/TowerAudio';
 
 export default function FileUpload({ onUploadSuccess }) {
     const [isDragging, setIsDragging] = useState(false);
@@ -103,6 +104,7 @@ export default function FileUpload({ onUploadSuccess }) {
 
             if (completed.length > 0 && onUploadSuccess) {
                 onUploadSuccess();
+                towerAudio.onUpload();
                 triggerParticles();
             }
             setJobStatuses([]);

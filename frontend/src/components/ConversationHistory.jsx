@@ -48,8 +48,8 @@ export default function ConversationHistory({ history, onClearHistory }) {
                 ) : (
                     <div className="space-y-3">
                         <AnimatePresence>
-                            {history.map(item => (
-                                <HistoryItem key={item.id} item={item} />
+                            {history.map((item, idx) => (
+                                <HistoryItem key={item.id} item={item} index={history.length - idx - 1} />
                             ))}
                         </AnimatePresence>
                     </div>

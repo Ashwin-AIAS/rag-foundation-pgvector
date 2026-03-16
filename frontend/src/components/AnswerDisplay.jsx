@@ -87,143 +87,181 @@ function ConfidenceArc({ value }) {
   );
 }
 
+const HERO_COLOURS = [
+  { accent:'#c0391b', light:'#e8824a', dim:'rgba(192,57,27,0.12)'  },
+  { accent:'#1a4a8a', light:'#5b9bd5', dim:'rgba(26,74,138,0.12)'  },
+  { accent:'#c0a030', light:'#e8c040', dim:'rgba(192,160,48,0.12)' },
+  { accent:'#8b5cf6', light:'#c084fc', dim:'rgba(139,92,246,0.12)' },
+  { accent:'#16a34a', light:'#4ade80', dim:'rgba(22,163,74,0.12)'  },
+];
+
 function SourceCard({ chunk, index }) {
   const [expanded, setExpanded] = useSourceState(false);
+  const hero = HERO_COLOURS[index % HERO_COLOURS.length];
   const score = Math.round((chunk.similarity_score || 0) * 100);
-  const barColor = 'rgba(245,245,247,0.5)';
-  const filename = (chunk.source_file || 'unknown').split('/').pop();
-  const truncatedName = filename.length > 28 ? filename.slice(0, 25) + '...' : filename;
-  const preview = (chunk.chunk_text || '').slice(0, 160);
+  const filename = (chunk.source_file || '').split('/').pop();
+  const truncName = filename.length > 30 ? filename.slice(0,27)+'...' : filename;
+  const preview = (chunk.chunk_text || '').slice(0, 130);
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 15 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ type: 'spring', stiffness: 350, damping: 25, delay: index * 0.08 }}
-      whileHover={{ y: -1, borderColor: 'rgba(255,255,255,0.18)' }}
+      initial={{ opacity:0, y:8 }}
+      animate={{ opacity:1, y:0 }}
+      transition={{ delay: index * 0.07, type:'spring', stiffness:400, damping:30 }}
       onClick={() => setExpanded(!expanded)}
       style={{
-        background: 'rgba(10,15,28,0.5)',
-        border: '1px solid rgba(245,245,247,0.15)',
-        borderRadius: '10px',
-        padding: '12px',
-        cursor: 'pointer',
-        transition: 'border-color 0.2s, box-shadow 0.2s',
-        marginBottom: '8px',
+        background:'var(--av-s2)',
+        borderLeft:`2px solid ${hero.accent}`,
+        border:`1px solid ${hero.accent}25`,
+        borderLeftWidth:2,
+        borderLeftColor: hero.accent,
+        borderRadius:5,
+        padding:'10px 14px',
+        marginBottom:7,
+        cursor:'pointer',
+        transition:'border-color 0.2s, box-shadow 0.2s',
       }}
+      whileHover={{ borderColor: hero.light, boxShadow:`0 0 12px ${hero.accent}20` }}
     >
       {/* Header row */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-            <rect x="2" y="1" width="10" height="12" rx="2" stroke="rgba(245,245,247,0.85)" strokeWidth="1.2"/>
-            <line x1="4" y1="5" x2="10" y2="5" stroke="rgba(245,245,247,0.85)" strokeWidth="0.8"/>
-            <line x1="4" y1="7.5" x2="10" y2="7.5" stroke="rgba(245,245,247,0.85)" strokeWidth="0.8"/>
-            <line x1="4" y1="10" x2="8" y2="10" stroke="rgba(245,245,247,0.85)" strokeWidth="0.8"/>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:7 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:7 }}>
+          <svg width="12" height="13" viewBox="0 0 12 13" fill="none" style={{ flexShrink:0 }}>
+            <rect x="1" y="1" width="10" height="11" rx="1.5" stroke={hero.light} strokeWidth="1"/>
+            <line x1="3" y1="4.5" x2="9" y2="4.5" stroke={hero.light} strokeWidth="0.7"/>
+            <line x1="3" y1="6.5" x2="9" y2="6.5" stroke={hero.light} strokeWidth="0.7"/>
+            <line x1="3" y1="8.5" x2="7" y2="8.5" stroke={hero.light} strokeWidth="0.7"/>
           </svg>
-          <span style={{ fontSize: '11px', color: 'rgba(230,241,255,0.8)', fontFamily: 'JetBrains Mono, monospace' }}>
-            {truncatedName}
-          </span>
+          <span style={{ fontFamily:"'Space Mono', monospace", fontSize:10, color:'rgba(245,240,232,0.75)' }}>{truncName}</span>
         </div>
+        {/* Score badge */}
         <span style={{
-          fontSize: '10px', fontWeight: '700', padding: '2px 8px',
-          borderRadius: '999px', fontFamily: 'Orbitron, sans-serif',
-          background: 'rgba(255,255,255,0.05)', color: 'rgba(245,245,247,0.7)', border: '0.5px solid rgba(255,255,255,0.1)',
+          fontFamily:"'Rajdhani', sans-serif", fontWeight:700, fontSize:9,
+          letterSpacing:'0.1em', padding:'2px 7px', borderRadius:2,
+          background: hero.dim, color: hero.light,
+          border:`1px solid ${hero.accent}35`,
         }}>
-          {score}%
+          {score}% MATCH
         </span>
       </div>
 
-      {/* Relevance bar */}
-      <div style={{ height: '3px', background: 'rgba(255,255,255,0.05)', borderRadius: '2px', marginBottom: '10px', overflow: 'hidden' }}>
+      {/* Score bar */}
+      <div style={{ height:2, background:'rgba(245,240,232,0.06)', borderRadius:1, marginBottom:9, overflow:'hidden' }}>
         <motion.div
-          initial={{ width: 0 }}
-          animate={{ width: `${score}%` }}
-          transition={{ delay: index * 0.06 + 0.2, duration: 0.6, ease: 'easeOut' }}
-          style={{ height: '100%', background: barColor, borderRadius: '2px' }}
+          initial={{ width:0 }}
+          animate={{ width:`${score}%` }}
+          transition={{ delay: index * 0.07 + 0.2, duration:0.7, ease:'easeOut' }}
+          style={{ height:'100%', background:`linear-gradient(90deg, ${hero.accent}, ${hero.light})`, borderRadius:1 }}
         />
       </div>
 
       {/* Chunk preview */}
-      <p style={{ fontSize: '11px', color: 'rgba(230,241,255,0.5)', fontFamily: 'JetBrains Mono, monospace', lineHeight: '1.6', margin: 0 }}>
-        {preview}{chunk.chunk_text?.length > 160 && !expanded ? '…' : ''}
+      <p style={{ fontFamily:"'Space Mono', monospace", fontSize:11, color:'rgba(245,240,232,0.5)', lineHeight:1.6, margin:0 }}>
+        {preview}{(chunk.chunk_text||'').length > 130 && !expanded ? '…' : ''}
       </p>
 
       {/* Expanded full chunk */}
       <AnimatePresence>
         {expanded && (
           <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.25 }}
-            style={{ overflow: 'hidden' }}
+            initial={{ height:0, opacity:0 }}
+            animate={{ height:'auto', opacity:1 }}
+            exit={{ height:0, opacity:0 }}
+            transition={{ duration:0.25 }}
+            style={{ overflow:'hidden' }}
           >
-            <p style={{ fontSize: '11px', color: 'rgba(230,241,255,0.7)', fontFamily: 'JetBrains Mono, monospace', lineHeight: '1.7', marginTop: '8px', borderTop: '1px solid rgba(245,245,247,0.1)', paddingTop: '8px' }}>
+            <p style={{ fontFamily:"'Space Mono', monospace", fontSize:11, color:'rgba(245,240,232,0.65)', lineHeight:1.7, marginTop:10, paddingTop:10, borderTop:`1px solid ${hero.accent}15` }}>
               {chunk.chunk_text}
             </p>
           </motion.div>
         )}
       </AnimatePresence>
 
-      <div style={{ fontSize: '10px', color: 'rgba(245,245,247,0.4)', marginTop: '6px', textAlign: 'right' }}>
-        {expanded ? '↑ collapse' : '↓ expand chunk'}
+      <div style={{ fontFamily:"'Rajdhani', sans-serif", fontSize:9, color:`${hero.light}50`, marginTop:7, letterSpacing:'0.08em' }}>
+        CHUNK {chunk.chunk_index} · {expanded ? 'COLLAPSE ↑' : 'EXPAND ↓'}
       </div>
     </motion.div>
   );
 }
 
-function SynapseLoader() {
+function ThinkingSkeleton() {
+  const SEQUENCE = [
+    { name:'STARK',    colour:'#e8824a', task:'EMBEDDING QUERY'     },
+    { name:'ROGERS',   colour:'#5b9bd5', task:'RETRIEVING INTEL'    },
+    { name:'ODINSON',  colour:'#e8c040', task:'RERANKING RESULTS'   },
+    { name:"T'CHALLA", colour:'#c084fc', task:'ANALYZING CONTEXT'   },
+    { name:'BANNER',   colour:'#4ade80', task:'GENERATING RESPONSE' },
+  ];
+
+  const [activeIdx, useSourceState] = useState(0);
+
+  useEffect(() => {
+    const iv = setInterval(() => {
+      useSourceState(prev => (prev + 1) % SEQUENCE.length);
+    }, 600);
+    return () => clearInterval(iv);
+  }, []);
+
   return (
-    <div className="flex flex-col items-center justify-center py-8 gap-4">
-      <svg width="120" height="80" viewBox="0 0 120 80" fill="none">
-        {/* Nodes */}
-        {[
-          [20, 20], [60, 20], [100, 20],
-          [40, 60], [80, 60],
-        ].map(([cx, cy], i) => (
-          <circle
-            key={i} cx={cx} cy={cy} r="6"
-            fill="rgba(245,245,247,0.06)"
-            stroke="rgba(245,245,247,0.4)" strokeWidth="1.5"
-            style={{
-              animation: `synapse-node-pulse 1.8s ease-in-out ${i * 0.18}s infinite`,
-            }}
-          />
-        ))}
+    <div style={{ padding:'16px 0' }}>
+      {/* Sequence rows */}
+      <div style={{ display:'flex', flexDirection:'column', gap:7 }}>
+        {SEQUENCE.map((hero, i) => {
+          const isActive = i === activeIdx;
+          const isDone = i < activeIdx;
+          return (
+            <div
+              key={hero.name}
+              style={{
+                display:'flex', alignItems:'center', gap:10,
+                opacity: isDone ? 0.35 : isActive ? 1 : 0.18,
+                transition:'opacity 0.3s ease',
+              }}
+            >
+              {/* Status dot */}
+              <div style={{
+                width:7, height:7, borderRadius:'50%',
+                background: isDone ? 'rgba(245,240,232,0.2)' : hero.colour,
+                boxShadow: isActive ? `0 0 8px ${hero.colour}` : 'none',
+                transition:'all 0.3s',
+                flexShrink:0,
+              }}/>
 
-        {/* Edges (animate stroke-dashoffset) */}
-        {[
-          'M20 20 L40 60', 'M60 20 L40 60', 'M60 20 L80 60',
-          'M100 20 L80 60', 'M20 20 L60 20', 'M60 20 L100 20',
-        ].map((d, i) => (
-          <path
-            key={i} d={d}
-            stroke="rgba(245,245,247,0.2)" strokeWidth="1"
-            fill="none"
-            strokeDasharray="60"
-            strokeDashoffset="60"
-            style={{
-              animation: `synapse-edge-fire 1.8s ease-in-out ${i * 0.22}s infinite`,
-            }}
-          />
-        ))}
-      </svg>
+              {/* Hero name */}
+              <span style={{ fontFamily:"'Rajdhani', sans-serif", fontWeight:700, fontSize:10, letterSpacing:'0.14em', color: hero.colour, minWidth:70 }}>
+                {hero.name}
+              </span>
 
-      <div className="flex items-center gap-2">
-        <span
-          className="hud-label"
-          style={{ animation: 'synapse-text-pulse 1.8s ease-in-out infinite' }}
-        >
-          Neural Processing
+              {/* Task label */}
+              <span style={{ fontFamily:"'Space Mono', monospace", fontSize:10, color:'rgba(245,240,232,0.55)', flex:1 }}>
+                {isDone ? '✓ COMPLETE' : isActive ? `${hero.task}...` : hero.task}
+              </span>
+
+              {/* Active shimmer bar */}
+              {isActive && (
+                <div style={{ width:60, height:2, background:'rgba(245,240,232,0.06)', borderRadius:1, overflow:'hidden' }}>
+                  <div style={{
+                    height:'100%', width:'40%',
+                    background:`linear-gradient(90deg, transparent, ${hero.colour}, transparent)`,
+                    animation:'av-progress-slide 0.9s ease-in-out infinite',
+                  }}/>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ASSEMBLING RESPONSE final line */}
+      <div style={{ marginTop:14, paddingTop:12, borderTop:'1px solid rgba(245,240,232,0.06)', display:'flex', alignItems:'center', gap:8 }}>
+        <div style={{ display:'flex', gap:3 }}>
+          {[0,1,2].map(i => (
+            <div key={i} style={{ width:4, height:4, borderRadius:'50%', background:'var(--av-muted)', animation:`hero-pulse 1.2s ease-in-out ${i*0.2}s infinite` }}/>
+          ))}
+        </div>
+        <span style={{ fontFamily:"'Rajdhani', sans-serif", fontWeight:700, fontSize:10, letterSpacing:'0.16em', color:'var(--av-muted)' }}>
+          ASSEMBLING RESPONSE
         </span>
-        {[0, 0.2, 0.4].map((delay, i) => (
-          <span
-            key={i}
-            className="w-1 h-1 rounded-full"
-            style={{ background: 'rgba(245,245,247,0.4)', animation: `synapse-dot 1.2s ease-in-out ${delay}s infinite` }}
-          />
-        ))}
       </div>
     </div>
   );
@@ -263,21 +301,125 @@ function StreamingText({ text, isStreaming }) {
   );
 }
 
+function DebugIntel({ latency, numChunks }) {
+  const [open, setOpen] = useSourceState(false);
+  if (!latency) return null;
+
+  const bars = [
+    { label:'EMBED',    ms: latency.embedding_ms,  colour:'#e8824a', hero:'iron'    },
+    { label:'RETRIEVE', ms: latency.retrieval_ms,  colour:'#5b9bd5', hero:'cap'     },
+    { label:'GENERATE', ms: latency.generation_ms, colour:'#e8c040', hero:'thor'    },
+  ];
+  const maxMs = Math.max(...bars.map(b => b.ms), 1);
+
+  return (
+    <div style={{ marginTop:12, borderTop:'1px solid rgba(245,240,232,0.06)', paddingTop:12 }}>
+      {/* Toggle */}
+      <button
+        onClick={() => setOpen(!open)}
+        style={{
+          background:'none', border:'none', cursor:'pointer', padding:0,
+          display:'flex', alignItems:'center', gap:6,
+        }}
+      >
+        <span style={{ fontFamily:"'Rajdhani', sans-serif", fontWeight:700, fontSize:9, letterSpacing:'0.16em', color:'rgba(245,240,232,0.28)' }}>
+          {open ? '▾' : '▸'} DEBUG INTEL
+        </span>
+        <span style={{ fontFamily:"'Space Mono', monospace", fontSize:9, color:'rgba(245,240,232,0.2)' }}>
+          {Math.round(latency.total_ms)}ms · {numChunks} src
+        </span>
+      </button>
+
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ height:0, opacity:0 }}
+            animate={{ height:'auto', opacity:1 }}
+            exit={{ height:0, opacity:0 }}
+            transition={{ duration:0.2 }}
+            style={{ overflow:'hidden' }}
+          >
+            <div style={{ paddingTop:12, display:'flex', flexDirection:'column', gap:8 }}>
+              {bars.map((bar, i) => (
+                <div key={bar.label} style={{ display:'flex', alignItems:'center', gap:10 }}>
+                  <span style={{ fontFamily:"'Rajdhani', sans-serif", fontWeight:700, fontSize:9, letterSpacing:'0.12em', color:bar.colour, minWidth:62 }}>
+                    {bar.label}
+                  </span>
+                  <div style={{ flex:1, height:4, background:'rgba(245,240,232,0.05)', borderRadius:2, overflow:'hidden' }}>
+                    <motion.div
+                      initial={{ width:0 }}
+                      animate={{ width:`${(bar.ms/maxMs)*100}%` }}
+                      transition={{ delay:i*0.1, duration:0.6, ease:'easeOut' }}
+                      style={{
+                        height:'100%', borderRadius:2,
+                        background:`linear-gradient(90deg, ${bar.colour}80, ${bar.colour})`,
+                        boxShadow:`0 0 4px ${bar.colour}40`,
+                      }}
+                    />
+                  </div>
+                  <span style={{ fontFamily:"'Space Mono', monospace", fontSize:9, color:'rgba(245,240,232,0.4)', minWidth:52, textAlign:'right' }}>
+                    {Math.round(bar.ms)}ms
+                  </span>
+                </div>
+              ))}
+
+              {/* Total + chunks row */}
+              <div style={{ display:'flex', justifyContent:'space-between', paddingTop:6, borderTop:'1px solid rgba(245,240,232,0.05)' }}>
+                <span style={{ fontFamily:"'Rajdhani', sans-serif", fontSize:9, fontWeight:700, letterSpacing:'0.12em', color:'rgba(245,240,232,0.4)' }}>
+                  TOTAL: {Math.round(latency.total_ms)}ms
+                </span>
+                <span style={{ fontFamily:"'Rajdhani', sans-serif", fontSize:9, fontWeight:700, letterSpacing:'0.12em', color:'rgba(245,240,232,0.4)' }}>
+                  SOURCES: {numChunks}
+                </span>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 export default function AnswerDisplay({ answer, isLoading, isThinking, isStreaming, confidence }) {
+    const cleanAnswer = (answer?.answer || '').replace(/^(Answer:|Answer\s*:)\s*/i, '');
     // Empty state
     if (!answer && !isLoading && !isThinking) {
         return (
-            <div className="answer-display">
-                <h2>Answer</h2>
-                <div className="flex flex-col items-center justify-center py-12 gap-3">
-                    <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
-                        <rect x="6" y="4" width="20" height="24" rx="3" stroke="rgba(245,245,247,0.15)" strokeWidth="1"/>
-                        <line x1="10" y1="10" x2="22" y2="10" stroke="rgba(245,245,247,0.12)" strokeWidth="1"/>
-                        <line x1="10" y1="14" x2="22" y2="14" stroke="rgba(245,245,247,0.12)" strokeWidth="1"/>
-                        <line x1="10" y1="18" x2="18" y2="18" stroke="rgba(245,245,247,0.12)" strokeWidth="1"/>
-                    </svg>
-                    <p className="hud-label">Upload a document and ask a question</p>
-                </div>
+            <div className="answer-display" style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', minHeight:220, gap:18 }}>
+              {/* Avengers A triangle */}
+              <svg width="64" height="58" viewBox="0 0 64 58" fill="none" style={{ opacity:0.18 }}>
+                <polygon points="32,3 61,55 3,55" stroke="var(--av-thor-lt)" strokeWidth="1.5" fill="none"/>
+                <polygon points="32,15 51,49 13,49" stroke="var(--av-cap-lt)" strokeWidth="0.8" fill="none"/>
+                <circle cx="32" cy="38" r="5" stroke="var(--av-iron-lt)" strokeWidth="1" fill="rgba(192,57,27,0.1)"/>
+                <line x1="32" y1="3" x2="32" y2="26" stroke="var(--av-panther-lt)" strokeWidth="0.6" opacity="0.6"/>
+              </svg>
+
+              {/* Label */}
+              <p style={{ fontFamily:"'Rajdhani', sans-serif", fontWeight:700, fontSize:11, letterSpacing:'0.2em', textTransform:'uppercase', color:'var(--av-muted)' }}>
+                INTELLIGENCE STANDBY
+              </p>
+
+              {/* 5 hero pulse dots */}
+              <div style={{ display:'flex', gap:10, alignItems:'center' }}>
+                {[
+                  ['#c0391b','iron'],['#1a4a8a','cap'],['#c0a030','thor'],
+                  ['#8b5cf6','panther'],['#16a34a','hulk']
+                ].map(([colour, name], i) => (
+                  <div
+                    key={name}
+                    title={name.toUpperCase()}
+                    style={{
+                      width:6, height:6, borderRadius:'50%',
+                      background: colour, opacity:0.5,
+                      animation:`hero-pulse 2.5s ease-in-out ${i*0.25}s infinite`,
+                    }}
+                  />
+                ))}
+              </div>
+
+              <p style={{ fontFamily:"'Space Mono', monospace", fontSize:11, color:'var(--av-muted)', opacity:0.6 }}>
+                Upload documents and execute a query
+              </p>
             </div>
         );
     }
@@ -297,7 +439,7 @@ export default function AnswerDisplay({ answer, isLoading, isThinking, isStreami
                 <div className="answer-markdown mb-4">
                     <div className="answer-wrapper">
                         <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                            {answer.answer}
+                            {cleanAnswer}
                         </ReactMarkdown>
                     </div>
                 </div>
@@ -415,16 +557,16 @@ export default function AnswerDisplay({ answer, isLoading, isThinking, isStreami
                 {!isStreaming && !isThinking && <ConfidenceBadge confidence={confidence} />}
             </div>
             {showSkeleton ? (
-                <SynapseLoader />
+                <ThinkingSkeleton />
             ) : (
                 <>
                     <div className="answer-markdown fade-reveal-container">
                         <div className="answer-wrapper">
                             {isStreaming ? (
-                                <StreamingText text={answer?.answer || ''} isStreaming={isStreaming} />
+                                <StreamingText text={cleanAnswer} isStreaming={isStreaming} />
                             ) : (
                                 <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                                    {answer?.answer || ""}
+                                    {cleanAnswer}
                                 </ReactMarkdown>
                             )}
                         </div>
@@ -433,18 +575,20 @@ export default function AnswerDisplay({ answer, isLoading, isThinking, isStreami
                         <ConfidenceArc value={confidence} />
                     )}
                     
-                    {answer?.retrieved_chunks?.length > 0 && !isLoading && !isThinking && (
-                      <div style={{ marginTop: '16px' }}>
-                        <div style={{
-                          fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.1em',
-                          color: 'rgba(230,241,255,0.4)', fontFamily: 'Orbitron, sans-serif',
-                          marginBottom: '10px',
-                        }}>
-                          Source Citations — {answer.retrieved_chunks.length} chunk{answer.retrieved_chunks.length !== 1 ? 's' : ''}
+                    {answer?.retrieved_chunks?.length > 0 && !isStreaming && !isThinking && (
+                      <div style={{ marginTop:18 }}>
+                        <div style={{ fontFamily:"'Rajdhani', sans-serif", fontWeight:700, fontSize:9, letterSpacing:'0.18em', textTransform:'uppercase', color:'var(--av-muted)', marginBottom:10 }}>
+                          INTELLIGENCE SOURCES — {answer.retrieved_chunks.length} CHUNK{answer.retrieved_chunks.length !== 1 ? 'S' : ''} RETRIEVED
                         </div>
-                        {answer.retrieved_chunks.map((chunk, i) => (
-                          <SourceCard key={i} chunk={chunk} index={i} />
-                        ))}
+                        <motion.div
+                          variants={{ hidden:{}, visible:{ transition:{ staggerChildren:0.07 } } }}
+                          initial="hidden"
+                          animate="visible"
+                        >
+                          {answer.retrieved_chunks.map((chunk, i) => (
+                            <SourceCard key={i} chunk={chunk} index={i} />
+                          ))}
+                        </motion.div>
                       </div>
                     )}
 
@@ -455,6 +599,11 @@ export default function AnswerDisplay({ answer, isLoading, isThinking, isStreami
                             numChunksRetrieved={answer.num_chunks_retrieved}
                         />
                     )}
+
+                    <DebugIntel
+                      latency={answer?.debug_latency}
+                      numChunks={answer?.num_chunks_retrieved || 0}
+                    />
                 </>
             )}
         </div>

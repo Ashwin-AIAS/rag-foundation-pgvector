@@ -12,7 +12,7 @@ import { motion, AnimatePresence } from 'framer-motion';
  * - Refusals preserved verbatim
  * - No re-querying when clicked
  */
-export default function HistoryItem({ item }) {
+export default function HistoryItem({ item, index = 0 }) {
     const [isExpanded, setIsExpanded] = useState(false);
 
     const formatTimestamp = (isoString) => {
@@ -50,19 +50,47 @@ export default function HistoryItem({ item }) {
             onClick={toggleExpanded}
         >
             <div className="p-3">
-                <div className="flex justify-between items-start gap-2 mb-1">
-                    <div style={{ fontFamily:'Space Mono, monospace', fontSize:11, color: isExpanded ? '#f5f0e8' : 'rgba(245,240,232,0.6)', lineHeight:1.55, letterSpacing:'-0.01em' }}>
-                        {item.isRefusal && <span style={{ fontFamily:'Rajdhani, sans-serif', fontSize:9, fontWeight:700, letterSpacing:'0.1em', textTransform:'uppercase', background:'rgba(192,160,48,0.08)', color:'rgba(232,192,64,0.8)', border:'1px solid rgba(192,160,48,0.2)', padding:'2px 7px', borderRadius:2, marginRight:6 }} title="Request refused">⚠️</span>}
-                        {item.question}
-                    </div>
-                    <div className="station-label station-label-panther flex-shrink-0">
-                        {formatTimestamp(item.timestamp)}
-                    </div>
+                {/* Collapsed Header Row */}
+                <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4, flexWrap:'wrap' }}>
+                  <span style={{ fontFamily:"'Rajdhani', sans-serif", fontSize:11, fontWeight:700, letterSpacing:'0.12em', color:'var(--av-panther-lt)' }}>
+                    M-{(index + 1).toString().padStart(3, '0')}
+                  </span>
+                  <span style={{
+                    fontFamily:"'Rajdhani', sans-serif", fontSize:9, fontWeight:700, letterSpacing:'0.16em',
+                    padding:'2px 6px', borderRadius:2, textTransform:'uppercase',
+                    background: item.retrieval_mode === 'vector' ? 'rgba(192,57,27,0.1)' :
+                               item.retrieval_mode === 'graph' ? 'rgba(139,92,246,0.1)' : 'rgba(26,74,138,0.1)',
+                    color: item.retrieval_mode === 'vector' ? 'var(--av-iron-lt)' :
+                           item.retrieval_mode === 'graph' ? 'var(--av-panther-lt)' : 'var(--av-cap-lt)',
+                  }}>
+                    {item.retrieval_mode || 'hybrid'}
+                  </span>
+                  <span style={{ fontFamily:"'Space Mono', monospace", fontSize:9, color:'rgba(245,240,232,0.35)' }}>
+                    {item.num_chunks_retrieved || 0} src
+                  </span>
+                  <span style={{ marginLeft:'auto', fontFamily:"'Space Mono', monospace", fontSize:9, color:'rgba(245,240,232,0.3)' }}>
+                    {formatTimestamp(item.timestamp)}
+                  </span>
+                </div>
+
+                <div style={{ fontFamily:'Space Mono, monospace', fontSize:11, color: isExpanded ? '#f5f0e8' : 'rgba(245,240,232,0.6)', lineHeight:1.55, letterSpacing:'-0.01em', marginBottom:6 }}>
+                    {item.isRefusal && <span style={{ fontFamily:'Rajdhani, sans-serif', fontSize:9, fontWeight:700, letterSpacing:'0.1em', textTransform:'uppercase', background:'rgba(192,160,48,0.08)', color:'rgba(232,192,64,0.8)', border:'1px solid rgba(192,160,48,0.2)', padding:'2px 7px', borderRadius:2, marginRight:6 }} title="Request refused">⚠️</span>}
+                    {item.question}
                 </div>
 
                 {!isExpanded && (
-                    <div className="line-clamp-1 pl-2" style={{ fontFamily:'Space Mono, monospace', fontSize:11, color:'rgba(245,240,232,0.65)', borderLeft:'1px solid rgba(139,92,246,0.15)' }}>
-                        {item.answer}
+                    <div style={{ display:'flex', alignItems:'center', gap:8, paddingLeft:4, borderLeft:'1px solid rgba(139,92,246,0.15)' }}>
+                      {/* Mini confidence arc */}
+                      {item.confidence != null && (
+                        <svg width="12" height="12" viewBox="0 0 24 24" style={{ transform:'rotate(-90deg)', flexShrink:0 }}>
+                          <circle cx="12" cy="12" r="10" stroke="rgba(245,240,232,0.1)" strokeWidth="3" fill="none"/>
+                          <circle cx="12" cy="12" r="10" stroke={item.confidence > 0.8 ? '#4ade80' : item.confidence > 0.5 ? '#e8c040' : '#e8824a'} strokeWidth="3" fill="none"
+                            strokeDasharray="62.8" strokeDashoffset={62.8 - (item.confidence * 62.8)} strokeLinecap="round" />
+                        </svg>
+                      )}
+                      <div className="line-clamp-1" style={{ fontFamily:'Space Mono, monospace', fontSize:11, color:'rgba(245,240,232,0.45)' }}>
+                          {item.answer.replace(/[#*`]/g, '')}
+                      </div>
                     </div>
                 )}
             </div>
@@ -78,8 +106,7 @@ export default function HistoryItem({ item }) {
                         className="border-t px-3 py-3 text-xs"
                     >
                         <div className="mb-3">
-                            <strong className="block station-label station-label-panther mb-1">Response Protocol:</strong>
-                            <p style={{ fontFamily:'Space Mono, monospace', fontSize:11, color:'rgba(245,240,232,0.65)', lineHeight:1.65, marginTop:8, paddingTop:8, borderTop:'1px solid rgba(245,240,232,0.06)' }}>
+                            <p style={{ fontFamily:'Space Mono, monospace', fontSize:11, color:'rgba(245,240,232,0.65)', lineHeight:1.65, marginTop:2, paddingTop:6, borderTop:'1px solid rgba(245,240,232,0.06)' }}>
                                 {item.answer}
                             </p>
                         </div>

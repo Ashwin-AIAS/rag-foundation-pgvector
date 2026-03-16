@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { getDocuments, deleteDocument, streamQuery, queryDocuments } from './services/api';
+import { towerAudio } from './services/TowerAudio';
 import FileUpload from './components/FileUpload';
 import QuestionInput from './components/QuestionInput';
 import AnswerDisplay from './components/AnswerDisplay';
@@ -13,6 +14,14 @@ import CyberCursor from './components/CyberCursor';
 import CommandPalette from './components/CommandPalette';
 import TiltCard from './components/TiltCard';
 import { motion, AnimatePresence } from 'framer-motion';
+
+const HERO_STATUS = [
+  { name:'STARK',    colour:'#e8824a', delay:0.3  },
+  { name:'ROGERS',   colour:'#5b9bd5', delay:0.42 },
+  { name:'ODINSON',  colour:'#e8c040', delay:0.54 },
+  { name:"T'CHALLA", colour:'#c084fc', delay:0.66 },
+  { name:'BANNER',   colour:'#4ade80', delay:0.78 },
+];
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -62,6 +71,7 @@ function App() {
   const [confidence, setConfidence] = useState(null);
   const [cmdPaletteOpen, setCmdPaletteOpen] = useState(false);
   const [toast, setToast] = useState({ message: null, type: 'error' });
+  const [soundOn, setSoundOn] = useState(true);
 
   // Ref for cancelling in-flight requests
   const abortControllerRef = useRef(null);
@@ -139,13 +149,15 @@ function App() {
     }
   };
 
-  const handleQueryStart = useCallback(async (question) => {
+  const handleQueryStart = useCallback(async (question, mode = 'hybrid', heroName = 'CAP') => {
     // Cancel any in-flight request
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
     const controller = new AbortController();
     abortControllerRef.current = controller;
+
+    towerAudio.onExecute();
 
     setIsQuerying(true);
     setIsThinking(true);
@@ -204,7 +216,9 @@ function App() {
             isRefusal: false,
             answer_type: fullText.answer_type,
             rows: fullText.rows,
-            columns: fullText.columns
+            columns: fullText.columns,
+            retrieval_mode: mode,
+            hero_used: heroName
           };
           setConversationHistory(prev => [newHistoryItem, ...prev].slice(0, 50));
           setIsQuerying(false);
@@ -235,6 +249,8 @@ function App() {
         setIsStreaming(false);
 
         const displayAnswer = (!finalAnswer || finalAnswer.length < 20) ? FALLBACK_MSG : fullText;
+        if (displayAnswer && !displayAnswer.startsWith('⚠️')) towerAudio.onAnswer();
+
         const newHistoryItem = {
           id: Date.now().toString(),
           question: question,
@@ -242,7 +258,9 @@ function App() {
           retrieved_chunks: [],
           num_chunks_retrieved: 0,
           timestamp: new Date().toISOString(),
-          isRefusal: displayAnswer.includes("do not contain enough information") || displayAnswer.startsWith("⚠️")
+          isRefusal: displayAnswer.includes("do not contain enough information") || displayAnswer.startsWith("⚠️"),
+          retrieval_mode: mode,
+          hero_used: heroName
         };
         setConversationHistory(prev => [newHistoryItem, ...prev].slice(0, 50));
         return;
@@ -264,7 +282,7 @@ function App() {
     try {
       setIsThinking(true);
       setIsStreaming(false);
-      const result = await queryDocuments(question, null, docsFilter);
+      const result = await queryDocuments(question, mode, docsFilter);
 
       if (controller.signal.aborted) return;
 
@@ -272,6 +290,8 @@ function App() {
       setIsThinking(false);
       setCurrentAnswer(result);
       if (result.confidence != null) setConfidence(result.confidence);
+      
+      if (result.answer && !result.answer.startsWith('⚠️')) towerAudio.onAnswer();
 
       const newHistoryItem = {
         id: Date.now().toString(),
@@ -280,7 +300,9 @@ function App() {
         retrieved_chunks: result.retrieved_chunks,
         num_chunks_retrieved: result.num_chunks_retrieved,
         timestamp: new Date().toISOString(),
-        isRefusal: result.answer.includes("do not contain enough information")
+        isRefusal: result.answer.includes("do not contain enough information"),
+        retrieval_mode: mode,
+        hero_used: heroName
       };
       setConversationHistory(prev => [newHistoryItem, ...prev].slice(0, 50));
 
@@ -288,6 +310,7 @@ function App() {
       if (controller.signal.aborted) return;
       console.error("Fallback failed:", fallbackError);
       showToast("Failed to generate answer", 'error');
+      towerAudio.onError();
       setIsQuerying(false);
       setIsThinking(false);
       setIsStreaming(false);
@@ -343,13 +366,53 @@ function App() {
             <p className="station-label station-label-iron mt-1">
               AVENGERS TOWER · INTELLIGENCE DIVISION
             </p>
-            <button
-              onClick={() => setCmdPaletteOpen(true)}
-              data-cursor-hover="true"
-              className="btn-ghost mt-2 text-[9px]"
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'center', marginTop:8 }}>
+              <button
+                onClick={() => setCmdPaletteOpen(true)}
+                data-cursor-hover="true"
+                className="btn-ghost text-[9px]"
+              >
+                ⌘K command palette
+              </button>
+              <motion.button
+                whileHover={{ scale:1.05 }}
+                whileTap={{ scale:0.95 }}
+                onClick={() => setSoundOn(towerAudio.toggle())}
+                style={{
+                  padding:'3px 10px', borderRadius:3, cursor:'pointer',
+                  background: soundOn ? 'rgba(192,57,27,0.1)' : 'rgba(245,240,232,0.04)',
+                  border: soundOn ? '1px solid rgba(192,57,27,0.3)' : '1px solid rgba(245,240,232,0.1)',
+                  fontFamily:"'Rajdhani', sans-serif", fontWeight:700, fontSize:9,
+                  letterSpacing:'0.12em', color: soundOn ? '#e8824a' : 'rgba(245,240,232,0.3)',
+                  marginLeft: 8,
+                }}
+              >
+                {soundOn ? '♪ SFX' : '♪ MUTE'}
+              </motion.button>
+            </div>
+            
+            <motion.div
+              initial={{ opacity:0, y:6 }}
+              animate={{ opacity:1, y:0 }}
+              className="flex justify-center flex-wrap gap-4 sm:gap-6 mt-4 pt-4 border-t"
+              style={{ borderColor:'rgba(192,57,27,0.15)' }}
             >
-              ⌘K command palette
-            </button>
+              {HERO_STATUS.map((h) => (
+                <div key={h.name} className="flex items-center gap-2">
+                  <span style={{
+                    width:6, height:6, borderRadius:'50%', background:h.colour,
+                    boxShadow:`0 0 8px ${h.colour}`,
+                    animation:`hero-pulse 2s ease-in-out ${h.delay}s infinite`
+                  }}/>
+                  <span style={{
+                    fontFamily:"'Rajdhani', sans-serif", fontSize:10, fontWeight:700,
+                    letterSpacing:'0.1em', color:h.colour
+                  }}>
+                    {h.name} <span style={{ opacity:0.5 }}>ONLINE</span>
+                  </span>
+                </div>
+              ))}
+            </motion.div>
           </div>
 
           <div className="flex-1 overflow-y-auto custom-scrollbar p-3 sm:p-5 lg:p-7">
