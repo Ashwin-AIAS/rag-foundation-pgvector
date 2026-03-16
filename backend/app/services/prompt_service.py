@@ -1,17 +1,203 @@
+import json
+import logging
 from typing import List, Dict, Any
 
+from app.services.generation_service import GenerationService
+
+logger = logging.getLogger(__name__)
+
+# --- AUTONOMOUS RAG PLANNER CONSTANTS ---
+
+PHASE1_PROMPT = """You are the planning engine of an advanced RAG system.
+The document database contains multilingual content (primarily German and English).
+Analyze the user query. Return ONLY valid JSON — no text outside the JSON block.
+If a field cannot be determined, use the default value shown below.
+{
+"query_type": "factual | comparative | multi_step | analytical | definition | cross_lingual | paper_comparison | unknown",
+"complexity": "low | medium | high",
+"detected_language": "en | de | other",
+"sub_queries": ["at least one sub-query required"],
+"retrieval_strategy": "single_query | multi_query",
+"cross_language_expansion": true | false
+}
+# Rules:
+# comparison query     → break into one sub-query per entity being compared
+# multi-step reasoning → decompose into ordered sub-queries
+# cross-language hint  → set cross_language_expansion = true
+# paper_comparison     → one sub-query per paper section (method, results, limits)
+# simple definition    → single sub-query, cross_language_expansion = false
+# unknown type         → default to factual, complexity = medium
+User Query: {user_query}
+"""
+
+PHASE2_PROMPT = """You are the tool routing engine of an autonomous RAG system.
+Select tools from the list below based on the query plan provided.
+Available tools (map to actual service classes):
+  - vector_search     → retrieval_service.py :: semantic similarity via pgvector
+  - keyword_search    → retrieval_service.py :: PostgreSQL full-text search
+  - graph_search      → graph_retrieval_service.py :: Neo4j entity traversal
+  - cross_doc_compare → triggers balanced_mode / multi_doc_mode in retrieval
+  - web_search        → external; use ONLY if query requires post-2024 data
+  - calculator        → use for explicit numerical operations
+Extend the plan JSON with these new fields. Return ONLY valid JSON.
+{
+  ...existing Phase 1 fields...,
+"tools_needed": ["tool1", "tool2"],
+"primary_tool": "the single most important tool",
+"requires_reasoning": true | false,
+"use_reranker": true | false
+}
+# Tool selection rules:
+# semantic / conceptual queries     → vector_search (always include)
+# exact names, codes, IDs           → keyword_search
+# entity relationships, authors     → graph_search (only if Neo4j available)
+# paper_comparison query_type       → cross_doc_compare + vector_search
+# cross_lingual query_type          → vector_search + keyword_search (both)
+# post-cutoff or current events     → web_search
+# numerical / statistical           → calculator
+# high complexity                   → use_reranker = true
+# low complexity factual            → use_reranker = false
+Query Plan: {phase1_plan_json}
+User Query: {user_query}
+"""
+
+PHASE3_PROMPT = """You are the retrieval parameter optimizer of an autonomous RAG system.
+The vector store uses pgvector with Gemini text-embedding-004 embeddings.
+Cosine similarity scores for this model are typically higher than generic models.
+Extend the plan JSON with retrieval parameters. Return ONLY valid JSON.
+{
+  ...existing Phase 1+2 fields...,
+"retrieval_parameters": {
+"top_k": "3-20",
+"similarity_threshold": "0.63-0.88",
+"hybrid_weight": {
+"vector": "0.5-0.8",
+"keyword": "0.2-0.5"
+      },
+"expand_to_adjacent_chunks": true | false
+  }
+}
+# Rules (Gemini text-embedding-004 calibrated):
+# low complexity      → top_k 3-5,  threshold 0.78-0.88
+# medium complexity   → top_k 6-10, threshold 0.70-0.78
+# high complexity     → top_k 10-20, threshold 0.65-0.72
+# cross_lingual       → threshold 0.65-0.75, vector_weight 0.6, keyword_weight 0.4
+# paper_comparison    → top_k 12-20, threshold 0.63-0.72, expand_chunks = true
+# if uncertain        → increase top_k by 2, lower threshold by 0.03
+# hybrid_weight must sum to 1.0 (your system uses 0.7/0.3 default)
+Query Plan: {phase2_plan_json}
+User Query: {user_query}
+"""
+
+PHASE4_PROMPT = """You are the validation planning module of an autonomous RAG system.
+Extend the plan JSON with validation directives. Return ONLY valid JSON.
+{
+  ...existing Phase 1+2+3 fields...,
+"requires_self_reflection": true | false,
+"confidence_requirement": "low | medium | high",
+"validation_checks": ["grounding", "consistency", "completeness"],
+"max_reflection_loops": "1 | 2 | 3"
+}
+# Rules:
+# multi_step or analytical query_type  → requires_self_reflection = true
+# high complexity                       → confidence_requirement = high
+# paper_comparison                      → validate grounding + completeness
+# simple definition, low complexity    → no reflection needed
+# reranker_top_score < 0.72            → requires_self_reflection = true
+# max_reflection_loops = 1 for medium, 2 for high, 3 for paper_comparison
+Query Plan: {phase3_plan_json}
+Reranker Top Score: {top_reranker_score}
+User Query: {user_query}
+"""
+
+DEFAULT_PLAN = {
+    "query_type": "unknown",
+    "complexity": "medium",
+    "detected_language": "en",
+    "sub_queries": [],
+    "retrieval_strategy": "single_query",
+    "cross_language_expansion": False,
+    "tools_needed": ["vector_search"],
+    "primary_tool": "vector_search",
+    "requires_reasoning": False,
+    "use_reranker": True,
+    "retrieval_parameters": {
+        "top_k": 10,
+        "similarity_threshold": 0.72,
+        "hybrid_weight": {"vector": 0.7, "keyword": 0.3},
+        "expand_to_adjacent_chunks": False
+    },
+    "requires_self_reflection": False,
+    "confidence_requirement": "medium",
+    "max_reflection_loops": 1
+}
+
+def safe_parse(llm_response: str, fallback_plan: dict, original_query: str) -> dict:
+    """Safely parse LLM JSON responses with fallback."""
+    try:
+        # Strip markdown json blocks if present
+        if "```json" in llm_response:
+            llm_response = llm_response.split("```json")[1].split("```")[0].strip()
+        elif "```" in llm_response:
+            llm_response = llm_response.split("```")[1].split("```")[0].strip()
+            
+        plan = json.loads(llm_response)
+        
+        # Ensure sub_queries is populated if empty or missing
+        if not plan.get("sub_queries"):
+            plan["sub_queries"] = [original_query]
+            
+        return plan
+    except (json.JSONDecodeError, ValueError) as e:
+        logger.warning(f"Failed to parse LLM JSON response: {e}. Falling back.")
+        plan = fallback_plan.copy()
+        plan['sub_queries'] = [original_query]
+        return plan
+
+async def call_gemini(prompt: str) -> str:
+    """Helper to call Gemini API via GenerationService."""
+    import asyncio
+    service = GenerationService()
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, service.generate, prompt)
 
 class PromptService:
     """
-    Service for constructing grounded prompts from retrieved context.
-    
-    Builds prompts that enforce strict grounding constraints to prevent
-    the LLM from using external knowledge or hallucinating information.
+    Service for constructing grounded prompts and autonomous RAG plans.
     """
     
     def __init__(self):
         """Initialize the prompt service."""
         pass
+        
+    async def build_autonomous_plan(self, user_query: str, top_reranker_score: float = 0.0):
+        """
+        Build a comprehensive execution plan using the 4-phase autonomous RAG planner.
+        """
+        # Phase 1: Classify & Decompose
+        p1_response = await call_gemini(PHASE1_PROMPT.format(user_query=user_query))
+        p1_plan     = safe_parse(p1_response, DEFAULT_PLAN, user_query)
+        
+        # Phase 2: Route Tools
+        p2_prompt = PHASE2_PROMPT.format(phase1_plan_json=json.dumps(p1_plan), user_query=user_query)
+        p2_response = await call_gemini(p2_prompt)
+        p2_plan     = safe_parse(p2_response, p1_plan, user_query)
+        
+        # Phase 3: Set Retrieval Params
+        p3_prompt = PHASE3_PROMPT.format(phase2_plan_json=json.dumps(p2_plan), user_query=user_query)
+        p3_response = await call_gemini(p3_prompt)
+        p3_plan     = safe_parse(p3_response, p2_plan, user_query)
+        
+        # Phase 4: Validation Directives
+        p4_prompt = PHASE4_PROMPT.format(
+            phase3_plan_json=json.dumps(p3_plan),
+            top_reranker_score=top_reranker_score,
+            user_query=user_query
+        )
+        p4_response = await call_gemini(p4_prompt)
+        final_plan  = safe_parse(p4_response, p3_plan, user_query)
+        
+        return final_plan
     
     def construct_prompt(
         self,
