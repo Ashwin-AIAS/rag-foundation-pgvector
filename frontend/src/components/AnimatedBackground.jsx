@@ -12,20 +12,22 @@ export default function AnimatedBackground() {
     let h = canvas.height = window.innerHeight;
     let raf;
 
-    const PARTICLE_COUNT = 50;
-    const CONNECT_DIST = 120;
+    const PARTICLE_COUNT = 60;
+    const CONNECT_DIST = 125;
     const COLORS = [
-      'rgba(192,57,27,0.7)',
-      'rgba(232,130,74,0.5)',
-      'rgba(245,166,35,0.4)',
+      'rgba(192,57,27,0.65)',    // Iron Man
+      'rgba(26,74,138,0.65)',    // Cap
+      'rgba(192,160,48,0.65)',   // Thor
+      'rgba(139,92,246,0.65)',   // Panther
+      'rgba(22,163,74,0.65)',    // Hulk
     ];
 
     const particles = Array.from({ length: PARTICLE_COUNT }, () => ({
       x: Math.random() * w,
       y: Math.random() * h,
-      vx: (Math.random() - 0.5) * 0.20,
-      vy: (Math.random() - 0.5) * 0.20,
-      r: (Math.random() * 1.4) + 0.5,
+      vx: (Math.random() - 0.5) * 0.25,
+      vy: (Math.random() - 0.5) * 0.25,
+      r: (Math.random() * 1.3) + 0.5,
       color: COLORS[Math.floor(Math.random() * COLORS.length)],
     }));
 
@@ -61,7 +63,7 @@ export default function AnimatedBackground() {
 
         // Speed cap
         const speed = Math.sqrt(p.vx*p.vx + p.vy*p.vy);
-        if (speed > 0.6) { p.vx = (p.vx/speed)*0.6; p.vy = (p.vy/speed)*0.6; }
+        if (speed > 0.75) { p.vx = (p.vx/speed)*0.75; p.vy = (p.vy/speed)*0.75; }
 
         p.x += p.vx;
         p.y += p.vy;
@@ -81,7 +83,7 @@ export default function AnimatedBackground() {
           if (ed < CONNECT_DIST) {
             const alpha = (1 - ed / CONNECT_DIST) * 0.15;
             ctx.beginPath();
-            ctx.strokeStyle = `rgba(192,57,27,${alpha * 0.5})`;
+            ctx.strokeStyle = `rgba(245,240,232,${alpha * 0.35})`;
             ctx.lineWidth = 0.4;
             ctx.moveTo(p.x, p.y);
             ctx.lineTo(q.x, q.y);
@@ -98,7 +100,7 @@ export default function AnimatedBackground() {
         // Glow (barely visible)
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.r + 2, 0, Math.PI * 2);
-        ctx.fillStyle = p.color.replace(/[\d.]+\)$/, '0.06)');
+        ctx.fillStyle = p.color.replace(/[\d.]+\)$/, '0.07)');
         ctx.fill();
       }
 

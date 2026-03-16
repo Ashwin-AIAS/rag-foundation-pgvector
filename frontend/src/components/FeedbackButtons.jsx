@@ -53,18 +53,16 @@ export default function FeedbackButtons({ question, answer, numChunksRetrieved, 
     return (
         <div className="flex flex-col items-end gap-2">
             <div className="flex items-center gap-3">
-                <span className="text-[10px] uppercase tracking-widest text-white/40">Rate Response:</span>
+                <span className="station-label" style={{ color:'rgba(245,240,232,0.3)' }}>Rate Response:</span>
 
                 <div className="flex gap-2">
                     <button
-                        className={`
-                            p-1.5 rounded transition-all duration-300 flex items-center gap-1.5
-                            ${feedbackGiven === 'positive'
-                                ? 'bg-green-500/20 text-green-400 border border-green-500/50 shadow-[0_0_10px_rgba(74,222,128,0.2)]'
-                                : 'text-white/50 hover:text-green-400 hover:bg-green-500/10'
-                            }
-                            ${(feedbackGiven && feedbackGiven !== 'positive') || isSubmitting ? 'opacity-30 cursor-not-allowed' : ''}
-                        `}
+                        style={
+                            feedbackGiven === 'positive'
+                                ? { background:'rgba(192,160,48,0.1)', border:'1px solid rgba(192,160,48,0.35)', color:'#e8c040', padding:6, borderRadius:4, cursor:'pointer' }
+                                : { background:'transparent', border:'1px solid rgba(245,240,232,0.1)', color:'rgba(245,240,232,0.35)', padding:6, borderRadius:4, cursor:'pointer' }
+                        }
+                        className={(feedbackGiven && feedbackGiven !== 'positive') || isSubmitting ? 'opacity-30 cursor-not-allowed' : ''}
                         onClick={() => handleFeedback('positive')}
                         disabled={feedbackGiven !== null || isSubmitting}
                         aria-label="Helpful"
@@ -76,14 +74,12 @@ export default function FeedbackButtons({ question, answer, numChunksRetrieved, 
                     </button>
 
                     <button
-                        className={`
-                            p-1.5 rounded transition-all duration-300 flex items-center gap-1.5
-                            ${feedbackGiven === 'negative'
-                                ? 'bg-red-500/20 text-red-400 border border-red-500/50 shadow-[0_0_10px_rgba(248,113,113,0.2)]'
-                                : 'text-white/50 hover:text-red-400 hover:bg-red-500/10'
-                            }
-                            ${(feedbackGiven && feedbackGiven !== 'negative') || isSubmitting ? 'opacity-30 cursor-not-allowed' : ''}
-                        `}
+                        style={
+                            feedbackGiven === 'negative'
+                                ? { background:'rgba(192,57,27,0.1)', border:'1px solid rgba(192,57,27,0.35)', color:'#e8824a', padding:6, borderRadius:4, cursor:'pointer' }
+                                : { background:'transparent', border:'1px solid rgba(245,240,232,0.1)', color:'rgba(245,240,232,0.35)', padding:6, borderRadius:4, cursor:'pointer' }
+                        }
+                        className={(feedbackGiven && feedbackGiven !== 'negative') || isSubmitting ? 'opacity-30 cursor-not-allowed' : ''}
                         onClick={() => handleFeedback('negative')}
                         disabled={feedbackGiven !== null || isSubmitting}
                         aria-label="Not helpful"
@@ -97,13 +93,13 @@ export default function FeedbackButtons({ question, answer, numChunksRetrieved, 
             </div>
 
             {feedbackGiven && (
-                <div className="hud-label animate-pulse font-mono">
+                <div className="station-label station-label-thor">
                     FEEDBACK_LOGGED_SUCCESSFULLY
                 </div>
             )}
 
             {error && (
-                <div className="text-[10px] text-red-400 tracking-wider font-mono">
+                <div style={{ fontFamily:'Space Mono, monospace', fontSize:10, color:'rgba(192,57,27,0.8)' }}>
                     ERROR: {error}
                 </div>
             )}

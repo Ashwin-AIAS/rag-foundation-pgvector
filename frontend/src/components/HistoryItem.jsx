@@ -37,31 +37,31 @@ export default function HistoryItem({ item }) {
     return (
         <motion.div
             layout
-            initial={{ opacity: 0, y: 20, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -20, scale: 0.95 }}
-            transition={{ type: 'spring', stiffness: 500, damping: 35 }}
+            initial={{ opacity:0, y:10, scale:0.97 }}
+            animate={{ opacity:1, y:0, scale:1 }}
+            exit={{ opacity:0, scale:0.97, transition:{ duration:0.15 } }}
+            transition={{ type:'spring', stiffness:500, damping:35, mass:0.6 }}
+            whileHover={{ x:2, transition:{ type:'spring', stiffness:500, damping:25 } }}
             style={{
-                background: isExpanded ? '#1e1108' : 'rgba(192,57,27,0.03)',
-                border: `1px solid ${isExpanded ? 'rgba(232,130,74,0.35)' : 'rgba(192,57,27,0.12)'}`,
-                marginBottom: 4, cursor: 'pointer', transition: 'all 0.2s',
-                clipPath: 'polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px))'
+              background: isExpanded ? '#161620' : 'rgba(139,92,246,0.03)',
+              border: `1px solid ${isExpanded ? 'rgba(139,92,246,0.35)' : 'rgba(245,240,232,0.06)'}`,
+              marginBottom:4, cursor:'pointer', borderRadius:6, overflow:'hidden',
             }}
             onClick={toggleExpanded}
         >
             <div className="p-3">
                 <div className="flex justify-between items-start gap-2 mb-1">
-                    <div style={{ fontFamily: 'Share Tech Mono, monospace', fontSize: 12, color: isExpanded ? '#ffd4b8' : 'rgba(255,212,184,0.65)', lineHeight: 1.5 }}>
-                        {item.isRefusal && <span className="hud-label px-2 py-0.5 rounded-md" style={{ background: 'rgba(192,57,27,0.1)', border: '1px solid rgba(192,57,27,0.2)' }} title="Request refused">⚠️</span>}
+                    <div style={{ fontFamily:'Space Mono, monospace', fontSize:11, color: isExpanded ? '#f5f0e8' : 'rgba(245,240,232,0.6)', lineHeight:1.55, letterSpacing:'-0.01em' }}>
+                        {item.isRefusal && <span style={{ fontFamily:'Rajdhani, sans-serif', fontSize:9, fontWeight:700, letterSpacing:'0.1em', textTransform:'uppercase', background:'rgba(192,160,48,0.08)', color:'rgba(232,192,64,0.8)', border:'1px solid rgba(192,160,48,0.2)', padding:'2px 7px', borderRadius:2, marginRight:6 }} title="Request refused">⚠️</span>}
                         {item.question}
                     </div>
-                    <div className="hud-label flex-shrink-0 mt-0.5">
+                    <div className="station-label station-label-panther flex-shrink-0">
                         {formatTimestamp(item.timestamp)}
                     </div>
                 </div>
 
                 {!isExpanded && (
-                    <div className="line-clamp-1 pl-2" style={{ fontFamily: 'Share Tech Mono, monospace', fontSize: 12, color: 'rgba(255,212,184,0.65)', borderLeft: '1px solid rgba(192,57,27,0.15)' }}>
+                    <div className="line-clamp-1 pl-2" style={{ fontFamily:'Space Mono, monospace', fontSize:11, color:'rgba(245,240,232,0.65)', borderLeft:'1px solid rgba(139,92,246,0.15)' }}>
                         {item.answer}
                     </div>
                 )}
@@ -78,27 +78,27 @@ export default function HistoryItem({ item }) {
                         className="border-t px-3 py-3 text-xs"
                     >
                         <div className="mb-3">
-                            <strong className="block hud-label mb-1">Response Protocol:</strong>
-                            <p style={{ fontFamily: 'Share Tech Mono, monospace', fontSize: 12, color: 'rgba(255,212,184,0.7)', lineHeight: 1.65, marginTop: 8, paddingTop: 8, borderTop: '1px solid rgba(192,57,27,0.1)' }}>
+                            <strong className="block station-label station-label-panther mb-1">Response Protocol:</strong>
+                            <p style={{ fontFamily:'Space Mono, monospace', fontSize:11, color:'rgba(245,240,232,0.65)', lineHeight:1.65, marginTop:8, paddingTop:8, borderTop:'1px solid rgba(245,240,232,0.06)' }}>
                                 {item.answer}
                             </p>
                         </div>
 
                         {item.num_chunks_retrieved > 0 && item.retrieved_chunks && (
-                            <div className="mt-3 pt-2 border-t" style={{ borderColor: 'rgba(192,57,27,0.1)' }}>
-                                <strong className="hud-label mt-1 block mb-2">
+                            <div className="mt-3 pt-2 border-t" style={{ borderColor: 'rgba(139,92,246,0.15)' }}>
+                                <strong className="station-label station-label-panther mt-1 block mb-2">
                                     References ({item.num_chunks_retrieved}):
                                 </strong>
                                 <div className="space-y-2">
                                     {item.retrieved_chunks.map((chunk, index) => (
-                                        <div key={index} className="rounded p-2" style={{ background: 'rgba(192,57,27,0.06)', border: '1px solid rgba(192,57,27,0.15)' }}>
+                                        <div key={index} className="rounded p-2" style={{ background: 'rgba(139,92,246,0.06)', border: '1px solid rgba(139,92,246,0.15)' }}>
                                             <div className="flex justify-between items-center mb-1 text-[10px]">
-                                                <span className="truncate max-w-[70%]" style={{ color: 'var(--im-cream)' }}>{chunk.source_file}</span>
-                                                <span className="font-mono" style={{ color: 'var(--im-orange)' }}>
+                                                <span className="truncate max-w-[70%]" style={{ color: '#f5f0e8' }}>{chunk.source_file}</span>
+                                                <span className="font-mono" style={{ color: '#c084fc' }}>
                                                     {(chunk.similarity_score * 100).toFixed(0)}%
                                                 </span>
                                             </div>
-                                            <div className="line-clamp-2 italic" style={{ color: 'rgba(255,212,184,0.5)' }}>
+                                            <div className="line-clamp-2 italic" style={{ color: 'rgba(245,240,232,0.5)' }}>
                                                 "{chunk.chunk_text}"
                                             </div>
                                         </div>

@@ -15,16 +15,18 @@ import { motion, AnimatePresence } from 'framer-motion';
  */
 export default function ConversationHistory({ history, onClearHistory }) {
     return (
-        <div style={{ background: '#130c06', display: 'flex', flexDirection: 'column', height: '100%' }}>
-            <div style={{ borderBottom: '1px solid rgba(192,57,27,0.15)', padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(10,6,2,0.5)' }}>
-                <h3 className="hud-title flex items-center gap-2">
-                    // MISSION_LOGS ({history.length}) //
+        <div style={{ background:'#0e0e14', display:'flex', flexDirection:'column', height:'100%', position:'relative', overflow:'hidden' }}>
+            <div style={{ height:2, background:'linear-gradient(90deg, #8b5cf6, #c084fc)', flexShrink:0 }}/>
+            <div style={{ borderBottom:'1px solid rgba(245,240,232,0.07)', padding:'13px 16px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                <h3 className="station-label station-label-panther flex items-center gap-2">
+                  <span style={{ width:5, height:5, borderRadius:'50%', background:'#8b5cf6', display:'inline-block', boxShadow:'0 0 6px rgba(139,92,246,0.8)' }}/>
+                  MISSION LOGS ({history.length})
                 </h3>
 
                 {history.length > 0 && (
                     <button
                         onClick={onClearHistory}
-                        className="im-btn im-btn-ghost" style={{ fontSize: 9, padding: '4px 12px' }}
+                        className="btn-ghost" style={{ fontSize:9, padding:'4px 10px' }}
                         title="Clear Logs"
                     >
                         PURGE
@@ -34,10 +36,14 @@ export default function ConversationHistory({ history, onClearHistory }) {
 
             <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
                 {history.length === 0 ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 180, gap: 8 }}>
-                        <div style={{ fontSize: 28, opacity: 0.1, fontFamily: 'Orbitron, sans-serif', fontWeight: 900 }}>◈</div>
-                        <p className="hud-label">NO MISSION DATA</p>
-                        <p style={{ fontFamily: 'Share Tech Mono, monospace', fontSize: 11, color: 'rgba(255,212,184,0.25)' }}>// execute query to initialize logs //</p>
+                    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', height:180, gap:10 }}>
+                      <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+                        <polygon points="18,4 32,28 4,28" fill="none" stroke="rgba(139,92,246,0.25)" strokeWidth="1.5"/>
+                        <polygon points="18,11 27,24 9,24" fill="none" stroke="rgba(139,92,246,0.12)" strokeWidth="1"/>
+                        <circle cx="18" cy="18" r="3" fill="rgba(139,92,246,0.2)" stroke="rgba(139,92,246,0.3)" strokeWidth="1"/>
+                      </svg>
+                      <p className="station-label station-label-panther">NO MISSION DATA</p>
+                      <p style={{ fontFamily:'Space Mono, monospace', fontSize:11, color:'rgba(245,240,232,0.22)', textAlign:'center', lineHeight:1.6 }}>Execute a query to<br/>initialize mission logs</p>
                     </div>
                 ) : (
                     <div className="space-y-3">
@@ -51,8 +57,8 @@ export default function ConversationHistory({ history, onClearHistory }) {
             </div>
 
             {history.length >= 50 && (
-                <div className="hud-label text-center py-2" style={{ borderTop: '1px solid rgba(192,57,27,0.1)', opacity: 0.5 }}>
-                    Buffer Limit Reached: Auto-archiving oldest entries
+                <div className="station-label station-label-panther text-center py-2" style={{ borderTop:'1px solid rgba(245,240,232,0.06)' }}>
+                    BUFFER LIMIT — AUTO-ARCHIVING
                 </div>
             )}
         </div>

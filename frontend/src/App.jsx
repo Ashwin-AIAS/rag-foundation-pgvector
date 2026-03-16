@@ -307,7 +307,7 @@ function App() {
   }, [handleQueryStart]);
 
   return (
-    <div className="h-full w-full flex flex-col overflow-hidden" style={{ background: '#0a0602', color: '#ffd4b8', fontFamily: "'Share Tech Mono', monospace" }}>
+    <div className="h-full w-full flex flex-col overflow-hidden" style={{ background:'#06060a', color:'#f5f0e8', fontFamily:"'Space Mono', monospace" }}>
       <CyberCursor />
       <CommandPalette
         isOpen={cmdPaletteOpen}
@@ -331,17 +331,22 @@ function App() {
 
         {/* Left Column: Main Content (Files + Q&A) */}
         <motion.main variants={itemVariants} className="flex-1 flex flex-col min-w-0 h-full overflow-hidden relative z-0 p-4">
-          <div className="flex-none py-5 sm:py-7 text-center" style={{ borderBottom: '1px solid rgba(192,57,27,0.2)', background: 'rgba(19,12,6,0.8)', backdropFilter: 'blur(8px)', padding: '16px 0' }}>
-            <h1 style={{ fontFamily: "'Orbitron', sans-serif", fontWeight: 900, fontSize: 'clamp(22px,3.5vw,34px)', letterSpacing: '0.1em', textTransform: 'uppercase', background: 'linear-gradient(135deg, #ffd4b8 0%, #e8824a 40%, #c0391b 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
+          <div className="flex-none py-5 sm:py-7 text-center" style={{ borderBottom:'1px solid rgba(245,240,232,0.07)', background:'rgba(14,14,20,0.9)', backdropFilter:'blur(8px)', padding:'14px 0', position:'relative' }}>
+            <div style={{ position:'absolute', top:0, left:0, right:0, height:'2px', display:'flex' }}>
+              {['#c0391b','#1a4a8a','#c0a030','#8b5cf6','#16a34a'].map((c,i) => (
+                <div key={i} style={{ flex:1, background:c, opacity:0.8 }} />
+              ))}
+            </div>
+            <h1 style={{ fontFamily:"'Rajdhani', sans-serif", fontWeight:700, fontSize:'clamp(24px,4vw,36px)', letterSpacing:'0.06em', textTransform:'uppercase', color:'#f5f0e8' }}>
               RAG TERMINAL
             </h1>
-            <p className="hud-label mt-2">
-              // ADVANCED DOCUMENT ANALYSIS SYSTEM //
+            <p className="station-label station-label-iron mt-1">
+              AVENGERS TOWER · INTELLIGENCE DIVISION
             </p>
             <button
               onClick={() => setCmdPaletteOpen(true)}
               data-cursor-hover="true"
-              className="im-btn im-btn-ghost mt-2 text-[9px]"
+              className="btn-ghost mt-2 text-[9px]"
             >
               ⌘K command palette
             </button>
@@ -351,21 +356,26 @@ function App() {
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 max-w-[1600px] mx-auto w-full">
 
               {/* File Upload + Document Selector Section */}
-              <div className="xl:col-span-1 flex flex-col gap-6 p-4">
-                <FileUpload onUploadSuccess={handleUploadSuccess} />
+              <div className="xl:col-span-1 flex flex-col gap-6">
+                <div className="station-card station-hulk p-4">
+                  <FileUpload onUploadSuccess={handleUploadSuccess} />
+                </div>
 
                 {/* Document Selector */}
-                <DocumentSelector
-                  documents={uploadedFiles}
-                  selectedDocs={selectedDocs}
-                  onSelectionChange={setSelectedDocs}
-                />
+                <div className="station-card station-hulk">
+                  <DocumentSelector
+                    documents={uploadedFiles}
+                    selectedDocs={selectedDocs}
+                    onSelectionChange={setSelectedDocs}
+                  />
+                </div>
 
                 {uploadedFiles.length > 0 && (
-                  <div className="hud-card p-4">
+                  <div className="station-card station-hulk p-4">
                     <div className="flex items-center justify-between mb-4 border-b border-white/10 pb-2">
-                      <h3 className="hud-title flex items-center gap-2">
-                        // DATA_MODULES //
+                      <h3 className="station-label station-label-hulk flex items-center gap-2">
+                        <span style={{ width:6, height:6, borderRadius:'50%', background:'var(--av-hulk)', display:'inline-block' }}></span>
+                        DATA MODULES
                       </h3>
                       <span className="doc-selector-badge">
                         {uploadedFiles.length}
@@ -380,13 +390,13 @@ function App() {
                         <motion.li 
                           key={index} 
                           variants={{ hidden: { opacity: 0, x: -16 }, visible: { opacity: 1, x: 0, transition: { type: 'spring', stiffness: 300, damping: 25 } } }}
-                          className="group flex items-center justify-between transition-all duration-200" style={{ background: 'rgba(192,57,27,0.04)', borderLeft: '1px solid rgba(192,57,27,0.15)', marginBottom: '3px', padding: '8px 12px', fontFamily: "'Share Tech Mono', monospace", fontSize: '12px' }} onMouseEnter={(e) => e.currentTarget.style.borderLeftColor='var(--im-orange)'} onMouseLeave={(e) => e.currentTarget.style.borderLeftColor='rgba(192,57,27,0.15)'}>
+                          className="group flex items-center justify-between transition-all duration-200" style={{ background:'rgba(22,163,74,0.03)', borderLeft:'1px solid rgba(22,163,74,0.12)', marginBottom:3, padding:'7px 12px', transition:'all 0.15s', fontFamily:"'Space Mono', monospace", fontSize:11, color:'rgba(245,240,232,0.65)' }} onMouseEnter={(e) => { e.currentTarget.style.borderLeftColor = 'rgba(22,163,74,0.45)'; e.currentTarget.style.color = '#4ade80'; }} onMouseLeave={(e) => { e.currentTarget.style.borderLeftColor = 'rgba(22,163,74,0.12)'; e.currentTarget.style.color = 'rgba(245,240,232,0.65)'; }}>
                           <span className="truncate max-w-[180px] transition-colors" style={{ color: 'rgba(255,212,184,0.65)' }}>
                             {file}
                           </span>
                           <button
                             onClick={() => handleDelete(file)}
-                            className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg transition-all duration-200" style={{ color: 'var(--im-muted)' }} onMouseEnter={(e)=>e.currentTarget.style.color='var(--im-crimson)'} onMouseLeave={(e)=>e.currentTarget.style.color='var(--im-muted)'}
+                            className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg transition-all duration-200" style={{ color: 'rgba(22,163,74,0.5)' }} onMouseEnter={(e)=>e.currentTarget.style.color='#ef4444'} onMouseLeave={(e)=>e.currentTarget.style.color='rgba(22,163,74,0.5)'}
                             title="Delete Protocol"
                           >
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -402,8 +412,9 @@ function App() {
 
               {/* Q&A Section */}
               <div className="xl:col-span-2 flex flex-col gap-6">
-                <div className="flex-none sticky top-0 z-10 bg-transparent p-4">
+                <div className="flex-none sticky top-0 z-10 bg-transparent p-4 station-card station-cap">
                   <QuestionInput
+
                     onQueryStart={handleQueryStart}
                     disabled={uploadedFiles.length === 0}
                     isLoading={isQuerying}
@@ -419,7 +430,6 @@ function App() {
                         animate={{ clipPath: 'inset(0 0 0% 0)', transition: { duration: 0.7, ease: [0.16, 1, 0.3, 1] } }}
                         exit={{ clipPath: 'inset(0 0 100% 0)', opacity: 0, transition: { duration: 0.3 } }}
                       >
-                        <TiltCard>
                           <AnswerDisplay
                             answer={currentAnswer}
                             isLoading={isQuerying}
@@ -427,7 +437,6 @@ function App() {
                             isStreaming={isStreaming}
                             confidence={confidence}
                           />
-                        </TiltCard>
                       </motion.div>
                     )}
                   </AnimatePresence>
@@ -439,7 +448,7 @@ function App() {
         </motion.main>
 
         {/* Right Column: Logs Panel (Sidebar) */}
-        <motion.aside variants={itemVariants} className="w-full lg:w-[260px] xl:w-[280px] flex-none h-[40vh] lg:h-full overflow-hidden z-20" style={{ borderLeft: '1px solid rgba(192,57,27,0.15)', background: '#130c06' }}>
+        <motion.aside variants={itemVariants} className="w-full lg:w-[260px] xl:w-[280px] flex-none h-[40vh] lg:h-full overflow-hidden z-20 station-panther" style={{ borderLeft:'1px solid rgba(245,240,232,0.07)', background:'#0e0e14' }}>
           <ConversationHistory
             history={conversationHistory}
             onClearHistory={handleClearHistory}
@@ -449,8 +458,8 @@ function App() {
 
       </motion.div>
 
-      <footer className="fixed bottom-0 left-0 w-full text-center pointer-events-none z-50" style={{ fontFamily: "'Orbitron', sans-serif", fontSize: '9px', letterSpacing: '0.16em', color: 'rgba(255,212,184,0.2)', borderTop: '1px solid rgba(192,57,27,0.1)', padding: '6px 0' }}>
-        // MARK_L · JARVIS_ONLINE · SYSTEMS_NOMINAL //
+      <footer className="fixed bottom-0 left-0 w-full text-center pointer-events-none z-50" style={{ fontFamily:"'Rajdhani', sans-serif", fontSize:9, letterSpacing:'0.16em', textTransform:'uppercase', textAlign:'center', padding:'5px 0', color:'rgba(245,240,232,0.18)', borderTop:'1px solid rgba(245,240,232,0.06)' }}>
+        AVENGERS TOWER · SYSTEMS ONLINE · EARTH'S MIGHTIEST INTELLIGENCE
       </footer>
     </div>
   );
