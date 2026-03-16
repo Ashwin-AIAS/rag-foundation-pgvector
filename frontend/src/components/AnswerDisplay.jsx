@@ -5,18 +5,6 @@ import remarkGfm from 'remark-gfm';
 import { motion, AnimatePresence } from 'framer-motion';
 import TypingCursor from './TypingCursor';
 
-function ConfidenceBadge({ confidence }) {
-    if (confidence == null || confidence === 0) return null;
-    let level = 'low';
-    if (confidence >= 80) level = 'high';
-    else if (confidence >= 60) level = 'mid';
-    return (
-        <span className={`confidence-badge confidence-${level}`}>
-            {confidence}% confidence
-        </span>
-    );
-}
-
 function ConfidenceArc({ value }) {
   // value: 0-1
   const pct = Math.max(0, Math.min(1, value || 0));
@@ -432,10 +420,6 @@ export default function AnswerDisplay({ answer, isLoading, isThinking, isStreami
     if (answer?.answer_type === 'table' && answer.columns && answer.rows) {
         return (
             <div className="answer-display">
-                <div className="answer-header-row">
-                    <h2>Generated Analysis</h2>
-                    {!isStreaming && <ConfidenceBadge confidence={confidence} />}
-                </div>
                 <div className="answer-markdown mb-4">
                     <div className="answer-wrapper">
                         <ReactMarkdown remarkPlugins={[remarkGfm]}>
@@ -510,10 +494,6 @@ export default function AnswerDisplay({ answer, isLoading, isThinking, isStreami
     if (fallbackTableData) {
         return (
             <div className="answer-display">
-                <div className="answer-header-row">
-                    <h2>Generated Analysis</h2>
-                    {!isStreaming && <ConfidenceBadge confidence={confidence} />}
-                </div>
                 <div className="answer-markdown overflow-x-auto">
                     <table>
                         <thead>
@@ -552,10 +532,6 @@ export default function AnswerDisplay({ answer, isLoading, isThinking, isStreami
     // Display answer with skeleton or content
     return (
         <div className="answer-display">
-            <div className="answer-header-row">
-                <h2>Answer</h2>
-                {!isStreaming && !isThinking && <ConfidenceBadge confidence={confidence} />}
-            </div>
             {showSkeleton ? (
                 <ThinkingSkeleton />
             ) : (
