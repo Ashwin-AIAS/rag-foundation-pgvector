@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { getDocuments, deleteDocument, streamQuery, queryDocuments } from './services/api';
+import { stopProcessingSound, triggerAudioCue } from './utils/audioCue';
+import { extractAudioCues } from './utils/parseResponse';
 import { towerAudio } from './services/TowerAudio';
 import FileUpload from './components/FileUpload';
 import QuestionInput from './components/QuestionInput';
@@ -149,7 +151,7 @@ function App() {
     }
   };
 
-  const handleQueryStart = useCallback(async (question, mode = 'hybrid', heroName = 'CAP') => {
+  const handleQueryStart = useCallback(async (question, mode = 'hybrid', heroMode = 'stark') => {
     // Cancel any in-flight request
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -188,14 +190,17 @@ function App() {
               setIsThinking(false);
               setIsStreaming(true);
             }
+            const { displayText } = extractAudioCues(currentText);
             setCurrentAnswer(prev => ({
               ...prev,
-              answer: currentText
+              answer: displayText
             }));
           },
           controller.signal,
           docsFilter,
-          (score) => setConfidence(score)
+          (score) => setConfidence(score),
+          mode,
+          heroMode
         );
 
         if (typeof fullText === 'object') {
@@ -203,6 +208,13 @@ function App() {
           receivedFirstToken = true;
           setIsThinking(false);
           setIsStreaming(false);
+          
+          const { displayText, cues } = extractAudioCues(fullText.answer);
+          stopProcessingSound();
+          const completeCue = cues.find(c => c.state === "complete");
+          if (completeCue) triggerAudioCue(completeCue.sound);
+          
+          fullText.answer = displayText;
           setCurrentAnswer(fullText);
           if (fullText.confidence != null) setConfidence(fullText.confidence);
 
@@ -218,7 +230,7 @@ function App() {
             rows: fullText.rows,
             columns: fullText.columns,
             retrieval_mode: mode,
-            hero_used: heroName
+            hero_used: heroMode
           };
           setConversationHistory(prev => [newHistoryItem, ...prev].slice(0, 50));
           setIsQuerying(false);
@@ -248,19 +260,25 @@ function App() {
         setIsThinking(false);
         setIsStreaming(false);
 
-        const displayAnswer = (!finalAnswer || finalAnswer.length < 20) ? FALLBACK_MSG : fullText;
-        if (displayAnswer && !displayAnswer.startsWith('⚠️')) towerAudio.onAnswer();
+        const displayAnswerRaw = (!finalAnswer || finalAnswer.length < 20) ? FALLBACK_MSG : fullText;
+        
+        const { displayText: finalDisplayText, cues } = extractAudioCues(displayAnswerRaw);
+        stopProcessingSound();
+        const completeCue = cues.find(c => c.state === "complete");
+        if (completeCue) triggerAudioCue(completeCue.sound);
+
+        if (finalDisplayText && !finalDisplayText.startsWith('⚠️')) towerAudio.onAnswer();
 
         const newHistoryItem = {
           id: Date.now().toString(),
           question: question,
-          answer: displayAnswer,
+          answer: finalDisplayText,
           retrieved_chunks: [],
           num_chunks_retrieved: 0,
           timestamp: new Date().toISOString(),
-          isRefusal: displayAnswer.includes("do not contain enough information") || displayAnswer.startsWith("⚠️"),
+          isRefusal: finalDisplayText.includes("do not contain enough information") || finalDisplayText.startsWith("⚠️"),
           retrieval_mode: mode,
-          hero_used: heroName
+          hero_used: heroMode
         };
         setConversationHistory(prev => [newHistoryItem, ...prev].slice(0, 50));
         return;
@@ -282,12 +300,19 @@ function App() {
     try {
       setIsThinking(true);
       setIsStreaming(false);
-      const result = await queryDocuments(question, mode, docsFilter);
+      const result = await queryDocuments(question, null, docsFilter, mode, heroMode);
 
       if (controller.signal.aborted) return;
 
       setIsQuerying(false);
       setIsThinking(false);
+      
+      const { displayText, cues } = extractAudioCues(result.answer);
+      stopProcessingSound();
+      const completeCue = cues.find(c => c.state === "complete");
+      if (completeCue) triggerAudioCue(completeCue.sound);
+      
+      result.answer = displayText;
       setCurrentAnswer(result);
       if (result.confidence != null) setConfidence(result.confidence);
       
@@ -302,7 +327,7 @@ function App() {
         timestamp: new Date().toISOString(),
         isRefusal: result.answer.includes("do not contain enough information"),
         retrieval_mode: mode,
-        hero_used: heroName
+        hero_used: heroMode
       };
       setConversationHistory(prev => [newHistoryItem, ...prev].slice(0, 50));
 

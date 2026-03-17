@@ -851,7 +851,8 @@ async def query_documents(
             
             prompt = prompt_service.construct_prompt(
                 retrieved_chunks=reranked_chunks,
-                user_question=request.question
+                user_question=request.question,
+                hero_mode=request.hero_mode
             )
             generation_service = GenerationService()
             summary_answer = generation_service.generate(prompt)
@@ -904,7 +905,8 @@ async def query_documents(
         prompt = prompt_service.construct_prompt(
             retrieved_chunks=reranked_chunks,
             user_question=request.question,
-            structured_mode=is_listing_intent
+            structured_mode=is_listing_intent,
+            hero_mode=request.hero_mode
         )
         
         generation_service = GenerationService()

@@ -68,8 +68,8 @@ export async function pollIngestStatus(jobId, onStatus = null, maxWaitMs = 18000
  * @param {string} retrievalMode - Optional: The retrieval mode to use
  * @returns {Promise<Object>} Query result with answer and chunks
  */
-export async function queryDocuments(question, topK = null, selectedDocuments = [], retrievalMode = 'hybrid') {
-    const body = { question, retrieval_mode: retrievalMode };
+export async function queryDocuments(question, topK = null, selectedDocuments = [], retrievalMode = 'hybrid', heroMode = 'stark') {
+    const body = { question, retrieval_mode: retrievalMode, hero_mode: heroMode };
     if (topK !== null) {
         body.top_k = topK;
     }
@@ -103,8 +103,8 @@ export async function queryDocuments(question, topK = null, selectedDocuments = 
  * @param {string} retrievalMode - Optional: The retrieval mode to use
  * @returns {Promise<string>} Full generated text
  */
-export async function streamQuery(question, onUpdate, signal = null, selectedDocuments = [], onConfidence = null, retrievalMode = 'hybrid') {
-    const body = { question, retrieval_mode: retrievalMode };
+export async function streamQuery(question, onUpdate, signal = null, selectedDocuments = [], onConfidence = null, retrievalMode = 'hybrid', heroMode = 'stark') {
+    const body = { question, retrieval_mode: retrievalMode, hero_mode: heroMode };
     if (selectedDocuments && selectedDocuments.length > 0) {
         body.selected_documents = selectedDocuments;
     }

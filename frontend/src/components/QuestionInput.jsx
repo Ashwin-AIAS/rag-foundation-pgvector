@@ -1,5 +1,22 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { triggerAudioCue } from '../utils/audioCue';
+
+const HERO_PROCESSING_SOUNDS = {
+  stark: "arc_reactor_hum",
+  rogers: "tactical_ping",
+  goindor: "dimensional_hum",
+  panther: "kimoyo_bead_sync",
+  banner: "heartbeat_monitor"
+};
+
+const API_HERO_MAP = {
+  IRON: 'stark',
+  CAP: 'rogers',
+  THOR: 'goindor',
+  PANTHER: 'panther',
+  HULK: 'banner'
+};
 
 const HERO_MODES = [
   { value:'vector',  hero:'IRON',    symbol:'⬡', colour:'#e8824a', dim:'rgba(192,57,27,0.15)',  label:'STARK',   title:'Vector search — fast, precise' },
@@ -19,9 +36,12 @@ function QuestionInput({ onQueryStart, disabled, isLoading }) {
         e.preventDefault();
         if (!question.trim() || disabled || isLoading) return;
 
+        const heroMode = API_HERO_MAP[selectedHero];
+        triggerAudioCue(HERO_PROCESSING_SOUNDS[heroMode]);
+
         // Delegate query handling entirely to the parent (App.jsx)
         if (onQueryStart) {
-            onQueryStart(question, mode, selectedHero);
+            onQueryStart(question, mode, heroMode);
         }
         setQuestion('');
     };

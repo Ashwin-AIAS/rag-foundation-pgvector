@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Literal
 
 
 class QueryRequest(BaseModel):
@@ -11,6 +11,10 @@ class QueryRequest(BaseModel):
         description="The user's question to answer using RAG",
         min_length=1,
         example="What is the company's vacation policy?"
+    )
+    hero_mode: Optional[Literal["stark", "rogers", "goindor", "panther", "banner"]] = Field(
+        "stark",
+        description="Hero persona and audio cue profile to use"
     )
     top_k: Optional[int] = Field(
         None,

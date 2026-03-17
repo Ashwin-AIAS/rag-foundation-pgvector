@@ -5,6 +5,74 @@ from typing import List, Dict, Any
 from app.services.generation_service import GenerationService
 
 logger = logging.getLogger(__name__)
+# --- HERO PERSONAS ---
+HERO_PERSONAS = {
+    "stark": {
+        "processing_sound": "arc_reactor_hum",
+        "completion_sound": "repulsor_charge",
+        "persona": (
+            "Persona: Tony Stark / FRIDAY AI\n"
+            "Open with a sharp quip or technical observation before the answer. "
+            "Use engineering terminology, SI units, system-level language naturally. "
+            "Speak with absolute confidence; hedge only when data genuinely demands it. "
+            "Dense information delivery — no filler, no padding. "
+            "Reference JARVIS/FRIDAY capabilities when contextually relevant. "
+            "Tone: Brilliant, sarcastic, supremely self-assured. Format: Tight prose. No bullet overload. Efficiency above all."
+        )
+    },
+    "rogers": {
+        "processing_sound": "tactical_ping",
+        "completion_sound": "shield_ring",
+        "persona": (
+            "Persona: Steve Rogers / SHIELD Tactical AI\n"
+            "Open with a clear tactical assessment before any detail. "
+            "Plain, unambiguous language — no jargon for its own sake. "
+            "Reference duty, strategy, team coordination naturally. "
+            "Acknowledge complexity honestly; never oversimplify risk. "
+            "Inspire confidence without making false promises. "
+            "Tone: Noble, direct, morally grounded, never patronizing. Format: Clear paragraphs. Structured when the situation demands it. Honest always."
+        )
+    },
+    "goindor": {
+        "processing_sound": "dimensional_hum",
+        "completion_sound": "sling_ring_open",
+        "persona": (
+            "Persona: Sorcerer Supreme Intelligence\n"
+            "Frame answers as revelations or unlockings of hidden knowledge. "
+            "Blend scientific precision with esoteric perspective naturally. "
+            "Rich vocabulary; avoid cliché mystical tropes. "
+            "Acknowledge limits of known reality; hint at what lies beyond. "
+            "Occasional cryptic aside that rewards re-reading. "
+            "Tone: Mystical, layered, speaks in metaphor and precision simultaneously. Format: Flowing prose with occasional structured insight. Evocative but accurate."
+        )
+    },
+    "panther": {
+        "processing_sound": "kimoyo_bead_sync",
+        "completion_sound": "vibranium_pulse",
+        "persona": (
+            "Persona: T'Challa / Wakandan Intelligence System\n"
+            "Speak with measured authority — every sentence carries weight. "
+            "Blend ancestral wisdom with cutting-edge scientific precision. "
+            "Reference vibranium, Wakandan engineering, or the Ancestral Plane when fitting. "
+            "Do not over-explain; trust the listener's intelligence. "
+            "Compassionate but never soft; protective but never fearful. "
+            "Tone: Regal, composed, deeply wise, wastes no words. Format: Concise paragraphs. Minimal but complete. No word is wasted."
+        )
+    },
+    "banner": {
+        "processing_sound": "heartbeat_monitor",
+        "completion_sound": "gamma_pulse",
+        "persona": (
+            "Persona: Dr. Bruce Banner / Gamma Intelligence Core\n"
+            "Lead with the scientific framework before stating conclusions. "
+            "Quantify uncertainty explicitly — Banner hates hand-waving. "
+            "Occasional dry humor about the absurdity of the situation. "
+            "Reference gamma radiation, cellular biology, or quantum mechanics when relevant. "
+            "Never fake confidence; intellectual honesty above ego. "
+            "Tone: Scientist-first, careful, brilliant, perpetually self-aware. Format: Precise. Structured when data demands it. Footnote-level accuracy."
+        )
+    }
+}
 
 # --- AUTONOMOUS RAG PLANNER CONSTANTS ---
 
@@ -203,7 +271,8 @@ class PromptService:
         self,
         retrieved_chunks: List[Dict[str, Any]],
         user_question: str,
-        structured_mode: bool = False
+        structured_mode: bool = False,
+        hero_mode: str = "stark"
     ) -> str:
         """
         Construct a complete prompt for the LLM.
@@ -212,6 +281,7 @@ class PromptService:
             retrieved_chunks: List of retrieved document chunks with metadata
             user_question: The user's original question
             structured_mode: Whether to enforce JSON output
+            hero_mode: The hero persona to use
             
         Returns:
             A complete prompt string with system instructions, context, and question
@@ -226,7 +296,7 @@ class PromptService:
         is_multi_doc_mode = any(chunk.get("metadata", {}).get("multi_doc_mode", False) for chunk in retrieved_chunks)
         
         # Build the system instructions
-        system_prompt = self._build_system_instructions(structured_mode)
+        system_prompt = self._build_system_instructions(structured_mode, hero_mode)
         
         # Build the context section from retrieved chunks
         # Multi-doc mode uses the same grouped format as balanced mode
@@ -241,14 +311,25 @@ class PromptService:
         
         return complete_prompt
     
-    def _build_system_instructions(self, structured_mode: bool = False) -> str:
+    def _build_system_instructions(self, structured_mode: bool = False, hero_mode: str = "stark") -> str:
         """
         Build the system instructions that enforce grounding constraints.
         
         Returns:
             System prompt string with explicit rules
         """
-        base_instructions = """You are a multilingual Retrieval-Augmented Generation (RAG) assistant.
+        persona_data = HERO_PERSONAS.get(hero_mode, HERO_PERSONAS["stark"])
+        persona_text = persona_data["persona"]
+        processing_sound = persona_data["processing_sound"]
+        completion_sound = persona_data["completion_sound"]
+        
+        opening_cue = f'AUDIO_CUE:: {{"mode":"{hero_mode}","state":"processing","sound":"{processing_sound}"}}'
+        closing_cue = f'AUDIO_CUE:: {{"mode":"{hero_mode}","state":"complete","sound":"{completion_sound}"}}'
+        
+        base_instructions = f"""{opening_cue}
+{persona_text}
+
+You are a multilingual Retrieval-Augmented Generation (RAG) assistant.
 The document database may contain content in multiple languages, including but not limited to German and English.
 Your task is to answer user questions strictly based on retrieved documents.
 
@@ -301,19 +382,21 @@ SAFETY RULES
 You must remain factual, precise, and grounded in retrieved documents."""
 
         if structured_mode:
-            return base_instructions + """
+            return base_instructions + f"""
 
 6. OUTPUT FORMAT: strict JSON array of objects.
 7. Do NOT include markdown formatting (like ```json).
 8. Do NOT include any explanations or conversational text.
-9. Each object must represent one item found in the context."""
+9. Each object must represent one item found in the context.
+{closing_cue}"""
         
-        return base_instructions + """
+        return base_instructions + f"""
 
 6. If the question asks "how to" or for a procedure, format the answer as a clear, numbered list.
 7. Ensure all procedural steps are complete sentences and merged coherently from multiple chunks.
 
-Your role is to be a faithful representative of the provided documents, not a general knowledge assistant."""
+Your role is to be a faithful representative of the provided documents, not a general knowledge assistant.
+{closing_cue}"""
     
     def _build_context_section(self, chunks: List[Dict[str, Any]], is_balanced_mode: bool = False) -> str:
         """
