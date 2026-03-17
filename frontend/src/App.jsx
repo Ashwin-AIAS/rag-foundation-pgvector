@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { getDocuments, deleteDocument, streamQuery, queryDocuments } from './services/api';
-import { stopProcessingSound, triggerAudioCue } from './utils/audioCue';
+import { triggerAudioCue } from './utils/audioCue';
 import { extractAudioCues } from './utils/parseResponse';
 import { towerAudio } from './services/TowerAudio';
 import FileUpload from './components/FileUpload';
@@ -210,7 +210,6 @@ function App() {
           setIsStreaming(false);
           
           const { displayText, cues } = extractAudioCues(fullText.answer);
-          stopProcessingSound();
           const completeCue = cues.find(c => c.state === "complete");
           if (completeCue) triggerAudioCue(completeCue.sound);
           
@@ -263,7 +262,6 @@ function App() {
         const displayAnswerRaw = (!finalAnswer || finalAnswer.length < 20) ? FALLBACK_MSG : fullText;
         
         const { displayText: finalDisplayText, cues } = extractAudioCues(displayAnswerRaw);
-        stopProcessingSound();
         const completeCue = cues.find(c => c.state === "complete");
         if (completeCue) triggerAudioCue(completeCue.sound);
 
@@ -308,7 +306,6 @@ function App() {
       setIsThinking(false);
       
       const { displayText, cues } = extractAudioCues(result.answer);
-      stopProcessingSound();
       const completeCue = cues.find(c => c.state === "complete");
       if (completeCue) triggerAudioCue(completeCue.sound);
       

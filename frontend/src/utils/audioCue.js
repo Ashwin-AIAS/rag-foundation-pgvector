@@ -1,13 +1,8 @@
 let audioCtx = null;
-let loopInterval = null;
 
 function getCtx() {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   return audioCtx;
-}
-
-export function stopProcessingSound() {
-  if (loopInterval) { clearInterval(loopInterval); loopInterval = null; }
 }
 
 // ── UTILITY BUILDERS ──────────────────────────────────────────
@@ -97,61 +92,11 @@ function reverb(ctx, dest, delayTime = 0.06, feedback = 0.4, wet = 0.35) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// STARK — Arc Reactor hum (processing loop)
-// Signature: electrical 60Hz hum with buzzing harmonics, slight
-// crackle — the chest piece powering up
-// ══════════════════════════════════════════════════════════════
-function starkProcessing(ctx) {
-  stopProcessingSound();
-  const master = masterGain(ctx, 0.5);
-
-  // Base reactor hum — continuous
-  const baseOsc = ctx.createOscillator();
-  baseOsc.type = 'sawtooth';
-  baseOsc.frequency.value = 60;
-  const baseFilter = lpf(ctx, 400);
-  const baseGain = ctx.createGain();
-  baseGain.gain.value = 0.3;
-  baseOsc.connect(baseFilter);
-  baseFilter.connect(baseGain);
-  baseGain.connect(master);
-  baseOsc.start();
-
-  // Harmonic buzz at 180Hz
-  const harmOsc = ctx.createOscillator();
-  harmOsc.type = 'square';
-  harmOsc.frequency.value = 180;
-  const harmGain = ctx.createGain();
-  harmGain.gain.value = 0.08;
-  harmOsc.connect(harmGain);
-  harmGain.connect(master);
-  harmOsc.start();
-
-  // Pulsing electrical crackle every 300ms
-  loopInterval = setInterval(() => {
-    if (!audioCtx) return;
-    const crackleCtx = audioCtx;
-    const cg = crackleCtx.createGain();
-    cg.gain.setValueAtTime(0.15, crackleCtx.currentTime);
-    cg.gain.exponentialRampToValueAtTime(0.001, crackleCtx.currentTime + 0.04);
-    cg.connect(master);
-    const n = noise(crackleCtx, 0.04, bpf(crackleCtx, 3000 + Math.random() * 2000, 8));
-    const f = bpf(crackleCtx, 3000 + Math.random() * 2000, 8);
-    f.connect(cg);
-    noise(crackleCtx, 0.04, f);
-  }, 300 + Math.random() * 100);
-
-  // Store refs to stop
-  audioCtx._starkOscs = [baseOsc, harmOsc];
-}
-
-// ══════════════════════════════════════════════════════════════
 // STARK — Repulsor charge (completion)
 // Signature: rising electronic whine → power charge peak → 
 // blast discharge with metallic click
 // ══════════════════════════════════════════════════════════════
 function starkCompletion(ctx) {
-  stopProcessingSound();
   if (audioCtx._starkOscs) {
     audioCtx._starkOscs.forEach(o => { try { o.stop(); } catch {} });
   }
@@ -205,33 +150,11 @@ function starkCompletion(ctx) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// ROGERS — Tactical ping (processing loop)
-// Signature: rhythmic sonar-style pulse with tail — SHIELD radar
-// ══════════════════════════════════════════════════════════════
-function rogersProcessing(ctx) {
-  stopProcessingSound();
-  const master = masterGain(ctx, 0.6);
-  const rev = reverb(ctx, master, 0.08, 0.5, 0.4);
-
-  loopInterval = setInterval(() => {
-    const ping = audioCtx.createOscillator();
-    ping.type = 'sine';
-    ping.frequency.setValueAtTime(880, audioCtx.currentTime);
-    ping.frequency.exponentialRampToValueAtTime(660, audioCtx.currentTime + 0.4);
-    const pg = envGain(audioCtx, rev, 0.5, 0.005, 0.01, 0.5);
-    ping.connect(pg);
-    ping.start(audioCtx.currentTime);
-    ping.stop(audioCtx.currentTime + 0.55);
-  }, 900);
-}
-
-// ══════════════════════════════════════════════════════════════
 // ROGERS — Shield ring (completion)
 // Signature: metallic bell strike — the vibranium shield impact
 // rich harmonics, long resonant tail
 // ══════════════════════════════════════════════════════════════
 function rogersCompletion(ctx) {
-  stopProcessingSound();
   const master = masterGain(ctx, 0.9);
   const rev = reverb(ctx, master, 0.12, 0.6, 0.5);
 
@@ -268,56 +191,11 @@ function rogersCompletion(ctx) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// GOINDOR — Dimensional hum (processing loop)
-// Signature: detuned chorus of sine waves, slow LFO modulation —
-// the Mirror Dimension spinning
-// ══════════════════════════════════════════════════════════════
-function goindorProcessing(ctx) {
-  stopProcessingSound();
-  const master = masterGain(ctx, 0.4);
-
-  // Three detuned oscillators create the Doctor Strange chorus
-  const freqs = [528, 531, 525];
-  const oscs = freqs.map(f => {
-    const o = ctx.createOscillator();
-    o.type = 'sine';
-    o.frequency.value = f;
-    const g = ctx.createGain(); g.gain.value = 0.25;
-    o.connect(g); g.connect(master);
-    o.start();
-    return o;
-  });
-
-  // LFO for slow tremolo — dimensional instability
-  const lfo = ctx.createOscillator();
-  lfo.frequency.value = 0.5;
-  const lfoGain = ctx.createGain(); lfoGain.gain.value = 0.15;
-  lfo.connect(lfoGain);
-  oscs.forEach(o => lfoGain.connect(o.frequency));
-  lfo.start();
-
-  // Sparkle — random high freq pings
-  loopInterval = setInterval(() => {
-    const sp = audioCtx.createOscillator();
-    sp.type = 'sine';
-    sp.frequency.value = 2000 + Math.random() * 3000;
-    const sg = audioCtx.createGain();
-    sg.gain.setValueAtTime(0.12, audioCtx.currentTime);
-    sg.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
-    sp.connect(sg); sg.connect(master);
-    sp.start(audioCtx.currentTime); sp.stop(audioCtx.currentTime + 0.18);
-  }, 200 + Math.random() * 300);
-
-  audioCtx._goindorOscs = [...oscs, lfo];
-}
-
-// ══════════════════════════════════════════════════════════════
 // GOINDOR — Sling Ring open (completion)
 // Signature: crackling spark burst → orange portal whoosh →
 // dimensional shimmer shimmer at the end
 // ══════════════════════════════════════════════════════════════
 function goindorCompletion(ctx) {
-  stopProcessingSound();
   if (audioCtx._goindorOscs) {
     audioCtx._goindorOscs.forEach(o => { try { o.stop(); } catch {} });
   }
@@ -365,35 +243,11 @@ function goindorCompletion(ctx) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// PANTHER — Kimoyo bead sync (processing loop)
-// Signature: short crystalline high-freq ticks — Wakandan tech
-// communicating, precise and rhythmic
-// ══════════════════════════════════════════════════════════════
-function pantherProcessing(ctx) {
-  stopProcessingSound();
-  const master = masterGain(ctx, 0.55);
-  const rev = reverb(ctx, master, 0.05, 0.3, 0.25);
-
-  loopInterval = setInterval(() => {
-    const o = audioCtx.createOscillator();
-    o.type = 'sine';
-    o.frequency.setValueAtTime(3200, audioCtx.currentTime);
-    o.frequency.exponentialRampToValueAtTime(1800, audioCtx.currentTime + 0.06);
-    const g = audioCtx.createGain();
-    g.gain.setValueAtTime(0.5, audioCtx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.08);
-    o.connect(g); g.connect(rev); g.connect(master);
-    o.start(audioCtx.currentTime); o.stop(audioCtx.currentTime + 0.1);
-  }, 110);
-}
-
-// ══════════════════════════════════════════════════════════════
 // PANTHER — Vibranium pulse (completion)
 // Signature: massive sub-bass thud (vibranium impact) + 
 // crystalline ringing overtone floating above it
 // ══════════════════════════════════════════════════════════════
 function pantherCompletion(ctx) {
-  stopProcessingSound();
   const master = masterGain(ctx, 1.0);
   const rev = reverb(ctx, master, 0.08, 0.5, 0.4);
 
@@ -437,54 +291,11 @@ function pantherCompletion(ctx) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// BANNER — Heartbeat (processing loop)
-// Signature: lub-dub double thump, realistic cardiac rhythm,
-// slightly elevated pace — Banner keeping it together
-// ══════════════════════════════════════════════════════════════
-function bannerProcessing(ctx) {
-  stopProcessingSound();
-  const master = masterGain(ctx, 0.6);
-
-  function lubDub() {
-    if (!loopInterval) return;
-
-    // LUB — first thump (louder)
-    const lub = audioCtx.createOscillator();
-    lub.type = 'sine';
-    lub.frequency.setValueAtTime(70, audioCtx.currentTime);
-    lub.frequency.exponentialRampToValueAtTime(35, audioCtx.currentTime + 0.12);
-    const lg = audioCtx.createGain();
-    lg.gain.setValueAtTime(0.9, audioCtx.currentTime);
-    lg.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
-    lub.connect(lg); lg.connect(master);
-    lub.start(audioCtx.currentTime); lub.stop(audioCtx.currentTime + 0.18);
-
-    // DUB — second thump (softer, 150ms later)
-    setTimeout(() => {
-      if (!audioCtx) return;
-      const dub = audioCtx.createOscillator();
-      dub.type = 'sine';
-      dub.frequency.setValueAtTime(55, audioCtx.currentTime);
-      dub.frequency.exponentialRampToValueAtTime(28, audioCtx.currentTime + 0.1);
-      const dg = audioCtx.createGain();
-      dg.gain.setValueAtTime(0.55, audioCtx.currentTime);
-      dg.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.12);
-      dub.connect(dg); dg.connect(master);
-      dub.start(audioCtx.currentTime); dub.stop(audioCtx.currentTime + 0.15);
-    }, 150);
-  }
-
-  lubDub();
-  loopInterval = setInterval(lubDub, 750);
-}
-
-// ══════════════════════════════════════════════════════════════
 // BANNER — Gamma pulse (completion)
 // Signature: heartbeat suddenly deepens + gamma radiation rumble
 // builds — the moment before transformation
 // ══════════════════════════════════════════════════════════════
 function bannerCompletion(ctx) {
-  stopProcessingSound();
   const master = masterGain(ctx, 0.95);
   const dist = distort(ctx, 150);
   dist.connect(master);
@@ -534,16 +345,11 @@ function bannerCompletion(ctx) {
 // DISPATCHER
 // ══════════════════════════════════════════════════════════════
 const SOUND_MAP = {
-  arc_reactor_hum:    (ctx) => starkProcessing(ctx),
-  repulsor_charge:    (ctx) => starkCompletion(ctx),
-  tactical_ping:      (ctx) => rogersProcessing(ctx),
-  shield_ring:        (ctx) => rogersCompletion(ctx),
-  dimensional_hum:    (ctx) => goindorProcessing(ctx),
-  sling_ring_open:    (ctx) => goindorCompletion(ctx),
-  kimoyo_bead_sync:   (ctx) => pantherProcessing(ctx),
-  vibranium_pulse:    (ctx) => pantherCompletion(ctx),
-  heartbeat_monitor:  (ctx) => bannerProcessing(ctx),
-  gamma_pulse:        (ctx) => bannerCompletion(ctx),
+  repulsor_charge:  (ctx) => starkCompletion(ctx),
+  shield_ring:      (ctx) => rogersCompletion(ctx),
+  sling_ring_open:  (ctx) => goindorCompletion(ctx),
+  vibranium_pulse:  (ctx) => pantherCompletion(ctx),
+  gamma_pulse:      (ctx) => bannerCompletion(ctx),
 };
 
 export function triggerAudioCue(soundName) {

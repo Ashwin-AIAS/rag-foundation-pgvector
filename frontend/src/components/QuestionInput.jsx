@@ -1,15 +1,5 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { triggerAudioCue } from '../utils/audioCue';
-
-const HERO_PROCESSING_SOUNDS = {
-  stark: "arc_reactor_hum",
-  rogers: "tactical_ping",
-  goindor: "dimensional_hum",
-  panther: "kimoyo_bead_sync",
-  banner: "heartbeat_monitor"
-};
-
 const API_HERO_MAP = {
   IRON: 'stark',
   CAP: 'rogers',
@@ -37,7 +27,6 @@ function QuestionInput({ onQueryStart, disabled, isLoading }) {
         if (!question.trim() || disabled || isLoading) return;
 
         const heroMode = API_HERO_MAP[selectedHero];
-        triggerAudioCue(HERO_PROCESSING_SOUNDS[heroMode]);
 
         // Delegate query handling entirely to the parent (App.jsx)
         if (onQueryStart) {

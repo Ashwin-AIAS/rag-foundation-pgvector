@@ -8,7 +8,6 @@ logger = logging.getLogger(__name__)
 # --- HERO PERSONAS ---
 HERO_PERSONAS = {
     "stark": {
-        "processing_sound": "arc_reactor_hum",
         "completion_sound": "repulsor_charge",
         "persona": (
             "Persona: Tony Stark / FRIDAY AI\n"
@@ -21,7 +20,6 @@ HERO_PERSONAS = {
         )
     },
     "rogers": {
-        "processing_sound": "tactical_ping",
         "completion_sound": "shield_ring",
         "persona": (
             "Persona: Steve Rogers / SHIELD Tactical AI\n"
@@ -34,7 +32,6 @@ HERO_PERSONAS = {
         )
     },
     "goindor": {
-        "processing_sound": "dimensional_hum",
         "completion_sound": "sling_ring_open",
         "persona": (
             "Persona: Sorcerer Supreme Intelligence\n"
@@ -47,7 +44,6 @@ HERO_PERSONAS = {
         )
     },
     "panther": {
-        "processing_sound": "kimoyo_bead_sync",
         "completion_sound": "vibranium_pulse",
         "persona": (
             "Persona: T'Challa / Wakandan Intelligence System\n"
@@ -60,7 +56,6 @@ HERO_PERSONAS = {
         )
     },
     "banner": {
-        "processing_sound": "heartbeat_monitor",
         "completion_sound": "gamma_pulse",
         "persona": (
             "Persona: Dr. Bruce Banner / Gamma Intelligence Core\n"
@@ -320,14 +315,11 @@ class PromptService:
         """
         persona_data = HERO_PERSONAS.get(hero_mode, HERO_PERSONAS["stark"])
         persona_text = persona_data["persona"]
-        processing_sound = persona_data["processing_sound"]
         completion_sound = persona_data["completion_sound"]
         
-        opening_cue = f'AUDIO_CUE:: {{"mode":"{hero_mode}","state":"processing","sound":"{processing_sound}"}}'
         closing_cue = f'AUDIO_CUE:: {{"mode":"{hero_mode}","state":"complete","sound":"{completion_sound}"}}'
         
-        base_instructions = f"""{opening_cue}
-{persona_text}
+        base_instructions = f"""{persona_text}
 
 You are a multilingual Retrieval-Augmented Generation (RAG) assistant.
 The document database may contain content in multiple languages, including but not limited to German and English.
