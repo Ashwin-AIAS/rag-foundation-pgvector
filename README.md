@@ -5,9 +5,9 @@ A full-stack Retrieval-Augmented Generation (RAG) system built with **FastAPI**,
 ## Features
 
 - **Document Ingestion** — Upload PDF, DOCX, TXT, Markdown, CSV, and Excel files with background processing and real-time status tracking
-- **Semantic Retrieval** — Vector similarity search powered by pgvector and Gemini `text-embedding-004`
-- **Hybrid Retrieval** — Combine vector search with keyword-based full-text search for better recall
-- **Graph RAG** _(optional)_ — Knowledge graph extraction and retrieval via Neo4j (auto-detected; disabled gracefully if unavailable)
+- **Semantic Retrieval** — Vector similarity search powered by pgvector and `gemini-embedding-001` (via `google-genai` SDK)
+- **Hybrid Retrieval** — Combine vector search with GIN-indexed keyword full-text search for better recall
+- **Graph RAG** _(optional)_ — Knowledge graph extraction and retrieval via Neo4j (auto-detected with silent fallback to prevent log spam)
 - **Reranking** — Cross-encoder reranking for improved answer relevance
 - **Grounded Generation** — Context-aware answers with source citations using Gemini 1.5 Flash
 - **Conversation History** — Multi-turn conversations with context-aware follow-up
@@ -139,16 +139,16 @@ RAG/
 
 1. **Upload** → Files are sent to `/upload` and saved immediately (HTTP 202)
 2. **Background Processing** → Parsing, chunking, and embedding run asynchronously
-3. **Embed** → Google Gemini `text-embedding-004` generates 768-dim vectors (with retry & rate limiting)
+3. **Embed** → Google Gemini `gemini-embedding-001` generates 768-dim vectors (using `google-genai` with rate-limit retry logic)
 4. **Store** → Chunks + embeddings are saved to PostgreSQL with per-chunk transaction safety
 
 ### Retrieval Modes
 
 | Mode       | Description                                          |
 | ---------- | ---------------------------------------------------- |
-| **Vector** | Cosine similarity search via pgvector                |
-| **Hybrid** | Vector search + full-text keyword search combined    |
-| **Graph**  | Knowledge graph traversal via Neo4j _(if available)_ |
+| **Vector** | Cosine similarity search via pgvector (accelerated with IVFFlat indexes) |
+| **Hybrid** | Vector search + GIN full-text keyword search combined    |
+| **Graph**  | Knowledge graph traversal via Neo4j _(singleton connection check)_ |
 
 ### Generation
 
@@ -174,7 +174,7 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for the full deployment guide.
 | ------------------------ | ------------------------ | --------------------------- |
 | `GEMINI_API_KEY`         | Google AI Studio API Key | _(required)_                |
 | `GEMINI_MODEL`           | Generation model         | `gemini-1.5-flash`          |
-| `GEMINI_EMBEDDING_MODEL` | Embedding model          | `models/text-embedding-004` |
+| `GEMINI_EMBEDDING_MODEL` | Embedding model          | `gemini-embedding-001`      |
 | `DATABASE_URL`           | Full PostgreSQL URL      | _(auto-built from parts)_   |
 | `POSTGRES_USER`          | DB user                  | `raguser`                   |
 | `POSTGRES_PASSWORD`      | DB password              | `ragpassword`               |
