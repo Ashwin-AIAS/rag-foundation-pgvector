@@ -14,7 +14,7 @@ import tempfile
 import os
 from pathlib import Path
 
-from app.database import check_database_connection, check_pgvector_extension, get_db, engine
+from app.database import check_database_connection, check_pgvector_extension, get_db, engine, create_performance_indexes
 from app.config import settings
 from app.services.ingestion import DocumentIngestionService
 from app.services.embedding_service import EmbeddingService
@@ -23,7 +23,7 @@ from app.services.prompt_service import PromptService
 from app.services.generation_service import GenerationService
 from app.services.document_service import DocumentService
 from app.services.reranking_service import RerankingService
-from app.services.graph_retrieval_service import GraphRetrievalService
+from app.services.graph_retrieval_service import GraphRetrievalService, is_neo4j_available
 from app.models.query import QueryRequest, QueryResponse, RetrievedChunk
 from app.models.feedback import FeedbackRequest, FeedbackResponse
 from app.models.document import Feedback, DocumentChunk, Document
@@ -32,9 +32,9 @@ logger = logging.getLogger(__name__)
 
 # ── Constants ────────────────────────────────────────────────
 MAX_TOP_K = 20           # Hard cap for top_k parameter
-RETRIEVAL_TOP_K = 15     # Broader initial retrieval for reranking
+RETRIEVAL_TOP_K = 10     # Broader initial retrieval for reranking
 RERANK_RETURN = 5        # Reranker returns this many chunks
-SLOW_QUERY_THRESHOLD = 3.0  # Seconds
+SLOW_QUERY_THRESHOLD = 2.0  # Seconds
 SLOW_RETRIEVAL_THRESHOLD_MS = 500  # ms — warn if retrieval exceeds this
 
 # ── In-process ingestion job tracker (thread-safe via GIL + dict assignment) ───
@@ -203,7 +203,8 @@ def create_query_logs_table():
             except Exception as gin_err:
                 conn.rollback()
                 logger.warning(f"GIN index on search_vector skipped (column may not exist): {gin_err}")
-
+        create_performance_indexes(engine)
+        
         logger.info("Database initialized (tables + vector index + ANALYZE)")
     except Exception as e:
         logger.error(f"Failed to initialize database: {e}")
@@ -723,7 +724,7 @@ async def query_documents(
 
             # 1. Standard Vector/Keyword Hybrid
             # Also runs for "graph" when Neo4j isn't available — transparently falls back
-            run_vector = mode in ["hybrid", "vector"] or (mode == "graph" and not settings.NEO4J_ENABLED)
+            run_vector = mode in ["hybrid", "vector"] or (mode == "graph" and not is_neo4j_available())
             if run_vector:
                 _t_vec = time.perf_counter()
                 retrieval_service = RetrievalService(db)
@@ -737,7 +738,7 @@ async def query_documents(
                 retrieved_chunks.extend(vector_chunks)
 
             # 2. Graph Retrieval (only when Neo4j is configured)
-            if mode in ["hybrid", "graph"] and settings.NEO4J_ENABLED:
+            if mode in ["hybrid", "graph"] and is_neo4j_available():
                 _t_graph = time.perf_counter()
                 try:
                     from neo4j import GraphDatabase
@@ -758,7 +759,7 @@ async def query_documents(
                 except Exception as e:
                     logger.warning(f"Graph retrieval failed: {e}")
                 graph_retrieval_ms = (time.perf_counter() - _t_graph) * 1000
-            elif mode == "graph" and not settings.NEO4J_ENABLED:
+            elif mode == "graph" and not is_neo4j_available():
                 logger.info("Graph RAG requested but Neo4j is not configured — falling back to hybrid.")
 
             total_retrieval_so_far = (time.perf_counter() - start_retrieval) * 1000

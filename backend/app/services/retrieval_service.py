@@ -1,4 +1,5 @@
 import logging
+import time
 from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -249,7 +250,11 @@ class RetrievalService:
         
         try:
             # Attempt Hybrid Search (requires search_vector column)
+            start_q = time.perf_counter()
             result = self.db.execute(query, params)
+            elapsed = (time.perf_counter() - start_q) * 1000
+            if elapsed > 2000:
+                logger.warning(f"Hybrid retrieval took {elapsed:.0f}ms (threshold 2000ms)")
         except Exception as e:
             # CRITICAL FIX: Rollback the failed transaction immediately
             self.db.rollback()

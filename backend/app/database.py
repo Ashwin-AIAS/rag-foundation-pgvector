@@ -55,4 +55,24 @@ def check_pgvector_extension() -> bool:
         print(f"pgvector check failed: {e}")
         return False
 
-
+def create_performance_indexes(db_engine):
+    with db_engine.connect() as conn:
+        try:
+            conn.execute(text("""
+                CREATE INDEX IF NOT EXISTS idx_chunks_embedding
+                ON document_chunks
+                USING ivfflat (embedding vector_cosine_ops)
+                WITH (lists = 100)
+            """))
+            conn.execute(text("""
+                CREATE INDEX IF NOT EXISTS idx_chunks_fts
+                ON document_chunks
+                USING GIN (to_tsvector('english', content))
+            """))
+            conn.execute(text("""
+                CREATE INDEX IF NOT EXISTS idx_chunks_filename
+                ON document_chunks (filename)
+            """))
+            conn.commit()
+        except Exception as e:
+            print(f"Index creation skipped (may already exist): {e}")

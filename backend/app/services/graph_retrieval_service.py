@@ -4,6 +4,28 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
+_neo4j_available = None  # None = untested, False = failed, True = ok
+
+def is_neo4j_available():
+    global _neo4j_available
+    if _neo4j_available is not None:
+        return _neo4j_available
+    try:
+        from neo4j import GraphDatabase
+        driver = GraphDatabase.driver(
+            settings.NEO4J_URI,
+            auth=(settings.NEO4J_USER, settings.NEO4J_PASSWORD)
+        )
+        driver.verify_connectivity()
+        driver.close()
+        _neo4j_available = True
+        return True
+    except Exception:
+        _neo4j_available = False
+        print("Neo4j not reachable — Graph RAG disabled.")  # log ONCE only
+        return False
+
+
 class GraphRetrievalService:
     """
     Service for retrieving context from Neo4j Graph Database.
