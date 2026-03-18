@@ -1,7 +1,7 @@
 import sys
 import os
 import traceback
-import google.generativeai as genai
+import google.genai as genai
 
 # Add /app to path
 sys.path.append('/app')

@@ -1,4 +1,4 @@
-import google.generativeai as genai
+import google.genai as genai
 import sys
 import os
 sys.path.append('/app')
