@@ -262,6 +262,24 @@ class PromptService:
         
         return final_plan
     
+    def generate_suggested_questions_prompt(
+        self,
+        user_question: str,
+        answer: str,
+        retrieved_chunks: List[Dict]
+    ) -> str:
+        sources = " ".join([c.get("source_file", "") for c in retrieved_chunks[:3]])
+        return f"""Based on this Q&A exchange, generate exactly 3 follow-up questions
+the user would logically ask next. Questions must be answerable from
+the same document corpus.
+
+Original question: {user_question}
+Answer summary: {answer[:300]}
+Source documents: {sources}
+
+Return ONLY a JSON array of 3 strings. No other text.
+Example: ["Question one?", "Question two?", "Question three?"]"""
+
     def construct_prompt(
         self,
         retrieved_chunks: List[Dict[str, Any]],

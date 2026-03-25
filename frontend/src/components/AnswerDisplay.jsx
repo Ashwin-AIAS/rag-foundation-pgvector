@@ -75,6 +75,37 @@ function ConfidenceArc({ value }) {
   );
 }
 
+function SuggestedQuestions({ questions, onSelect }) {
+  if (!questions || questions.length === 0) return null;
+  return (
+    <div className="mt-4 pt-4 border-t border-cyber-primary/10" style={{ borderColor: 'rgba(192,57,27,0.15)' }}>
+      <p className="text-[10px] uppercase tracking-widest mb-3" style={{ color: 'rgba(245,240,232,0.4)', fontFamily: "'Rajdhani', sans-serif" }}>
+        // SUGGESTED QUERIES
+      </p>
+      <div className="flex flex-col gap-2">
+        {questions.map((q, i) => (
+          <button
+            key={i}
+            onClick={() => onSelect(q)}
+            className="text-left text-sm px-4 py-2.5 rounded-lg transition-all duration-200 tracking-wide"
+            style={{
+              color: 'rgba(245,240,232,0.7)',
+              fontFamily: "'Space Mono', monospace",
+              border: '1px solid rgba(192,57,27,0.2)',
+              backgroundColor: 'rgba(14,14,20,0.4)'
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'rgba(192,57,27,0.5)'; e.currentTarget.style.backgroundColor = 'rgba(192,57,27,0.05)'; e.currentTarget.style.color = '#e8824a'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'rgba(192,57,27,0.2)'; e.currentTarget.style.backgroundColor = 'rgba(14,14,20,0.4)'; e.currentTarget.style.color = 'rgba(245,240,232,0.7)'; }}
+          >
+            <span style={{ color: 'rgba(192,57,27,0.5)', marginRight: '8px' }}>▸</span>
+            {q}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 const HERO_COLOURS = [
   { accent:'#c0391b', light:'#e8824a', dim:'rgba(192,57,27,0.12)'  },
   { accent:'#1a4a8a', light:'#5b9bd5', dim:'rgba(26,74,138,0.12)'  },
@@ -368,7 +399,7 @@ function DebugIntel({ latency, numChunks }) {
   );
 }
 
-export default function AnswerDisplay({ answer, isLoading, isThinking, isStreaming, confidence }) {
+export default function AnswerDisplay({ answer, isLoading, isThinking, isStreaming, confidence, onSelectSuggestion }) {
     const cleanAnswer = (answer?.answer || '').replace(/^(Answer:|Answer\s*:)\s*/i, '');
     // Empty state
     if (!answer && !isLoading && !isThinking) {
@@ -460,6 +491,10 @@ export default function AnswerDisplay({ answer, isLoading, isThinking, isStreami
                         numChunksRetrieved={answer.num_chunks_retrieved}
                     />
                 </div>
+                <SuggestedQuestions
+                  questions={answer?.suggested_questions}
+                  onSelect={onSelectSuggestion}
+                />
             </div>
         );
     }
@@ -525,6 +560,10 @@ export default function AnswerDisplay({ answer, isLoading, isThinking, isStreami
                         numChunksRetrieved={answer.num_chunks_retrieved}
                     />
                 </div>
+                <SuggestedQuestions
+                  questions={answer?.suggested_questions}
+                  onSelect={onSelectSuggestion}
+                />
             </div>
         );
     }
@@ -573,6 +612,13 @@ export default function AnswerDisplay({ answer, isLoading, isThinking, isStreami
                             question={answer.question}
                             answer={answer.answer}
                             numChunksRetrieved={answer.num_chunks_retrieved}
+                        />
+                    )}
+
+                    {!isStreaming && !isThinking && (
+                        <SuggestedQuestions
+                          questions={answer?.suggested_questions}
+                          onSelect={onSelectSuggestion}
                         />
                     )}
 

@@ -944,6 +944,22 @@ async def query_documents(
         # STANDARD GENERATION
         start_generation = time.perf_counter()
         raw_answer = generation_service.generate(prompt)
+        
+        suggested_questions = []
+        try:
+            suggestions_prompt = prompt_service.generate_suggested_questions_prompt(
+                user_question=request.question,
+                answer=raw_answer,
+                retrieved_chunks=reranked_chunks
+            )
+            suggestions_raw = generation_service.generate(suggestions_prompt)
+            import json, re
+            match = re.search(r'\[.*?\]', suggestions_raw, re.DOTALL)
+            if match:
+                suggested_questions = json.loads(match.group(0))[:3]
+        except Exception:
+            suggested_questions = []
+
         generation_time = (time.perf_counter() - start_generation) * 1000
         total_time = (time.perf_counter() - start_total) * 1000
         
@@ -1000,6 +1016,7 @@ async def query_documents(
             num_chunks_retrieved=len(response_chunks),
             question=request.question,
             confidence=confidence,
+            suggested_questions=suggested_questions,
             answer_type=answer_type,
             columns=columns,
             rows=rows,
@@ -1137,3 +1154,36 @@ def chunks_count(db: Session = Depends(get_db)):
         "total_chunks": total,
         "chunks_with_embeddings": with_embedding
     }
+
+class SuggestionRequest(BaseModel):
+    question: str
+    answer: str
+    sources: List[str] = []
+
+class SuggestionResponse(BaseModel):
+    suggested_questions: List[str]
+
+@app.post("/query/suggestions", response_model=SuggestionResponse)
+async def generate_suggestions(
+    request: SuggestionRequest,
+    db: Session = Depends(get_db)
+):
+    try:
+        retrieved_chunks = [{"source_file": src} for src in request.sources]
+        prompt_service = PromptService()
+        suggestions_prompt = prompt_service.generate_suggested_questions_prompt(
+            user_question=request.question,
+            answer=request.answer,
+            retrieved_chunks=retrieved_chunks
+        )
+        generation_service = GenerationService()
+        suggestions_raw = generation_service.generate(suggestions_prompt)
+        import json, re
+        match = re.search(r'\[.*?\]', suggestions_raw, re.DOTALL)
+        suggested_questions = []
+        if match:
+            suggested_questions = json.loads(match.group(0))[:3]
+        return SuggestionResponse(suggested_questions=suggested_questions)
+    except Exception as e:
+        logger.warning(f"Failed to generate suggested questions: {e}")
+        return SuggestionResponse(suggested_questions=[])

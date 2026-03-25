@@ -56,6 +56,10 @@ class QueryResponse(BaseModel):
     num_chunks_retrieved: int = Field(..., description="Number of chunks retrieved")
     question: str = Field(..., description="The original question")
     confidence: int = Field(0, description="Confidence score 0-100")
+    suggested_questions: Optional[List[str]] = Field(
+        default=[],
+        description="3 suggested follow-up questions"
+    )
     answer_type: str = Field("text", description="Type of answer: 'text' or 'table'")
     columns: Optional[List[str]] = Field(None, description="Column names for table response")
     rows: Optional[List[Dict[str, Any]]] = Field(None, description="Rows for table response")

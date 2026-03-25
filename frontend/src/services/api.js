@@ -251,3 +251,20 @@ export async function getAnalytics() {
     }
     return response.json();
 }
+
+/**
+ * Fetch suggested follow-up questions for the completed query
+ * @param {string} question - The original user question
+ * @param {string} answer - The generated answer content
+ * @param {string[]} sources - The list of documents queried
+ * @returns {Promise<Object>} Suggested questions array
+ */
+export async function getSuggestedQuestions(question, answer, sources = []) {
+  const response = await fetch(`${API_BASE_URL}/query/suggestions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ question, answer, sources })
+  });
+  if (!response.ok) return { suggested_questions: [] };
+  return response.json();
+}

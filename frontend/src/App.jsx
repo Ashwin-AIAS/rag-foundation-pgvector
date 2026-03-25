@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { getDocuments, deleteDocument, streamQuery, queryDocuments } from './services/api';
+import { getDocuments, deleteDocument, streamQuery, queryDocuments, getSuggestedQuestions } from './services/api';
 import { triggerAudioCue } from './utils/audioCue';
 import { extractAudioCues } from './utils/parseResponse';
 import { towerAudio } from './services/TowerAudio';
@@ -267,6 +267,20 @@ function App() {
 
         if (finalDisplayText && !finalDisplayText.startsWith('⚠️')) towerAudio.onAnswer();
 
+        // After stream is finished, asynchronously fetch our suggested questions
+        if (!finalDisplayText.startsWith('⚠️')) {
+            getSuggestedQuestions(
+              question,
+              finalDisplayText.slice(0, 400),
+              docsFilter
+            ).then(suggestions => {
+                setCurrentAnswer(prev => prev ? {
+                    ...prev,
+                    suggested_questions: suggestions.suggested_questions
+                } : prev);
+            }).catch(e => console.warn(e));
+        }
+
         const newHistoryItem = {
           id: Date.now().toString(),
           question: question,
@@ -349,6 +363,10 @@ function App() {
 
   const handleSelectQuery = useCallback((questionText) => {
     handleQueryStart(questionText);
+  }, [handleQueryStart]);
+
+  const handleSuggestionSelect = useCallback((questionText) => {
+    handleQueryStart(questionText, 'hybrid');
   }, [handleQueryStart]);
 
   return (
@@ -521,6 +539,7 @@ function App() {
                             isThinking={isThinking}
                             isStreaming={isStreaming}
                             confidence={confidence}
+                            onSelectSuggestion={handleSuggestionSelect}
                           />
                       </motion.div>
                     )}
