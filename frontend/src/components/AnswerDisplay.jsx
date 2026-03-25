@@ -615,12 +615,10 @@ export default function AnswerDisplay({ answer, isLoading, isThinking, isStreami
                         />
                     )}
 
-                    {!isStreaming && !isThinking && (
-                        <SuggestedQuestions
-                          questions={answer?.suggested_questions}
-                          onSelect={onSelectSuggestion}
-                        />
-                    )}
+                    <SuggestedQuestions
+                      questions={answer?.suggested_questions}
+                      onSelect={onSelectSuggestion}
+                    />
 
                     <DebugIntel
                       latency={answer?.debug_latency}

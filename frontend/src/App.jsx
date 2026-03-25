@@ -267,18 +267,25 @@ function App() {
 
         if (finalDisplayText && !finalDisplayText.startsWith('⚠️')) towerAudio.onAnswer();
 
-        // After stream is finished, asynchronously fetch our suggested questions
+        setCurrentAnswer(prev => ({
+            ...prev,
+            answer: finalDisplayText
+        }));
+
         if (!finalDisplayText.startsWith('⚠️')) {
-            getSuggestedQuestions(
-              question,
-              finalDisplayText.slice(0, 400),
-              docsFilter
-            ).then(suggestions => {
-                setCurrentAnswer(prev => prev ? {
+            try {
+                const suggestions = await getSuggestedQuestions(
+                  question,
+                  finalDisplayText.slice(0, 400),
+                  docsFilter
+                );
+                setCurrentAnswer(prev => ({
                     ...prev,
-                    suggested_questions: suggestions.suggested_questions
-                } : prev);
-            }).catch(e => console.warn(e));
+                    suggested_questions: suggestions.suggested_questions || []
+                }));
+            } catch (e) {
+                console.warn(e);
+            }
         }
 
         const newHistoryItem = {
