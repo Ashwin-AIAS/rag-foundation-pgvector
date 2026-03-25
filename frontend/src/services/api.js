@@ -268,3 +268,21 @@ export async function getSuggestedQuestions(question, answer, sources = []) {
   if (!response.ok) return { suggested_questions: [] };
   return response.json();
 }
+
+/**
+ * Fetch autocomplete suggestions for the given query prefix
+ * @param {string} q - The query prefix
+ * @returns {Promise<string[]>} Array of suggestions
+ */
+export async function getAutocomplete(q) {
+  if (!q || q.length < 2) return [];
+  try {
+    const res = await fetch(
+      `${API_BASE_URL}/query/autocomplete?q=${encodeURIComponent(q)}`
+    );
+    const data = await res.json();
+    return data.suggestions || [];
+  } catch {
+    return [];
+  }
+}

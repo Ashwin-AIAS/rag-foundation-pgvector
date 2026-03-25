@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { getAutocomplete } from '../services/api';
 const API_HERO_MAP = {
   IRON: 'stark',
   CAP: 'rogers',
@@ -21,6 +22,11 @@ function QuestionInput({ onQueryStart, disabled, isLoading }) {
     const [mode, setMode] = useState('hybrid');
     const [selectedHero, setSelectedHero] = useState('CAP');
     const [isFocused, setIsFocused] = useState(false);
+
+    const [suggestions, setSuggestions]   = useState([]);
+    const [showDropdown, setShowDropdown] = useState(false);
+    const [activeIndex, setActiveIndex]   = useState(-1);
+    const debounceRef = useRef(null);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -79,13 +85,86 @@ function QuestionInput({ onQueryStart, disabled, isLoading }) {
                     <input
                         type="text"
                         value={question}
-                        onChange={(e) => setQuestion(e.target.value)}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setQuestion(value);
+                          clearTimeout(debounceRef.current);
+                          debounceRef.current = setTimeout(async () => {
+                            if (value.trim().length >= 2) {
+                              const results = await getAutocomplete(value.trim());
+                              setSuggestions(results);
+                              setShowDropdown(results.length > 0);
+                            } else {
+                              setShowDropdown(false);
+                            }
+                          }, 250);
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === 'ArrowDown') {
+                            setActiveIndex(i => Math.min(i + 1, suggestions.length - 1));
+                            event.preventDefault();
+                          } else if (event.key === 'ArrowUp') {
+                            setActiveIndex(i => Math.max(i - 1, -1));
+                            event.preventDefault();
+                          } else if (event.key === 'Enter' && activeIndex >= 0) {
+                            setQuestion(suggestions[activeIndex]);
+                            setShowDropdown(false);
+                            setActiveIndex(-1);
+                            event.preventDefault();
+                            return;
+                          } else if (event.key === 'Escape') {
+                            setShowDropdown(false);
+                          }
+                        }}
                         onFocus={() => setIsFocused(true)}
-                        onBlur={() => setIsFocused(false)}
+                        onBlur={() => {
+                          setIsFocused(false);
+                          setTimeout(() => setShowDropdown(false), 150);
+                        }}
                         placeholder={disabled ? "// OFFLINE — UPLOAD DOCUMENTS TO ACTIVATE" : "// ENTER INTELLIGENCE QUERY..."}
                         disabled={disabled || isLoading}
                         className="cap-input"
                     />
+                    
+                    {showDropdown && suggestions.length > 0 && (
+                      <div className="absolute top-full left-0 right-0 z-50 mt-1 rounded-lg overflow-hidden shadow-lg"
+                           style={{ backgroundColor: 'var(--av-s2)', border: '1px solid rgba(26,74,138,0.3)' }}>
+                        {suggestions.map((s, i) => (
+                          <button
+                            key={i}
+                            className="w-full text-left px-4 py-2.5 text-xs transition-colors duration-100"
+                            style={{
+                              fontFamily: "'Space Mono', monospace",
+                              backgroundColor: i === activeIndex ? 'rgba(26,74,138,0.15)' : 'transparent',
+                              color: i === activeIndex ? 'var(--av-cap-lt)' : 'var(--av-muted)',
+                              borderBottom: i === suggestions.length - 1 ? 'none' : '1px solid rgba(26,74,138,0.1)'
+                            }}
+                            onMouseEnter={(e) => {
+                              if (i !== activeIndex) {
+                                e.currentTarget.style.backgroundColor = 'rgba(26,74,138,0.1)';
+                                e.currentTarget.style.color = 'var(--av-text)';
+                              }
+                            }}
+                            onMouseLeave={(e) => {
+                              if (i !== activeIndex) {
+                                e.currentTarget.style.backgroundColor = 'transparent';
+                                e.currentTarget.style.color = 'var(--av-muted)';
+                              }
+                            }}
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              setQuestion(s);
+                              setShowDropdown(false);
+                              setActiveIndex(-1);
+                            }}
+                          >
+                            <span style={{ color: 'rgba(26,74,138,0.4)', marginRight: 8 }}>↩</span>
+                            {s}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
                     {isLoading && (
                         <div style={{ position:'absolute', right:12, top:'50%', transform:'translateY(-50%)' }}>
                           <div style={{ width:18, height:18, borderRadius:'50%', border:'2px solid rgba(26,74,138,0.2)', borderTopColor:'#5b9bd5', animation:'spin 0.9s linear infinite' }}/>

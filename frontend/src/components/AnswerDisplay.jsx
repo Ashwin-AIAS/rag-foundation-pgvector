@@ -203,87 +203,74 @@ function SourceCard({ chunk, index }) {
   );
 }
 
-function ThinkingSkeleton() {
-  const SEQUENCE = [
-    { name:'STARK',    colour:'#e8824a', task:'EMBEDDING QUERY'     },
-    { name:'ROGERS',   colour:'#5b9bd5', task:'RETRIEVING INTEL'    },
-    { name:'ODINSON',  colour:'#e8c040', task:'RERANKING RESULTS'   },
-    { name:"T'CHALLA", colour:'#c084fc', task:'ANALYZING CONTEXT'   },
-    { name:'BANNER',   colour:'#4ade80', task:'GENERATING RESPONSE' },
-  ];
+const HERO_THINKING = {
+  stark:   { label: "STARK IS THINKING",   color: "#00c8ff", pulse: "arc_reactor"   },
+  rogers:  { label: "ROGERS IS ANALYZING", color: "#e8f4ff", pulse: "shield_scan"   },
+  odinson: { label: "ODINSON CALLS FORTH", color: "#a78bfa", pulse: "bifrost"       },
+  panther: { label: "T'CHALLA CONSULTING", color: "#9333ea", pulse: "vibranium"     },
+  banner:  { label: "BANNER CALCULATING",  color: "#22c55e", pulse: "gamma"         },
+};
 
-  const [activeIdx, useSourceState] = useState(0);
-
-  useEffect(() => {
-    const iv = setInterval(() => {
-      useSourceState(prev => (prev + 1) % SEQUENCE.length);
-    }, 600);
-    return () => clearInterval(iv);
-  }, []);
-
+function HeroThinkingIndicator({ heroMode = "stark" }) {
+  const hero = HERO_THINKING[heroMode] || HERO_THINKING.stark;
   return (
-    <div style={{ padding:'16px 0' }}>
-      {/* Sequence rows */}
-      <div style={{ display:'flex', flexDirection:'column', gap:7 }}>
-        {SEQUENCE.map((hero, i) => {
-          const isActive = i === activeIdx;
-          const isDone = i < activeIdx;
-          return (
-            <div
-              key={hero.name}
-              style={{
-                display:'flex', alignItems:'center', gap:10,
-                opacity: isDone ? 0.35 : isActive ? 1 : 0.18,
-                transition:'opacity 0.3s ease',
-              }}
-            >
-              {/* Status dot */}
-              <div style={{
-                width:7, height:7, borderRadius:'50%',
-                background: isDone ? 'rgba(245,240,232,0.2)' : hero.colour,
-                boxShadow: isActive ? `0 0 8px ${hero.colour}` : 'none',
-                transition:'all 0.3s',
-                flexShrink:0,
-              }}/>
+    <div className="flex flex-col gap-4 py-6 px-2">
 
-              {/* Hero name */}
-              <span style={{ fontFamily:"'Rajdhani', sans-serif", fontWeight:700, fontSize:10, letterSpacing:'0.14em', color: hero.colour, minWidth:70 }}>
-                {hero.name}
-              </span>
-
-              {/* Task label */}
-              <span style={{ fontFamily:"'Space Mono', monospace", fontSize:10, color:'rgba(245,240,232,0.55)', flex:1 }}>
-                {isDone ? '✓ COMPLETE' : isActive ? `${hero.task}...` : hero.task}
-              </span>
-
-              {/* Active shimmer bar */}
-              {isActive && (
-                <div style={{ width:60, height:2, background:'rgba(245,240,232,0.06)', borderRadius:1, overflow:'hidden' }}>
-                  <div style={{
-                    height:'100%', width:'40%',
-                    background:`linear-gradient(90deg, transparent, ${hero.colour}, transparent)`,
-                    animation:'av-progress-slide 0.9s ease-in-out infinite',
-                  }}/>
-                </div>
-              )}
-            </div>
-          );
-        })}
+      {/* Hero label + animated dots */}
+      <div className="flex items-center gap-3">
+        <div
+          className="w-2.5 h-2.5 rounded-full animate-pulse"
+          style={{ backgroundColor: hero.color,
+                   boxShadow: `0 0 8px ${hero.color}` }}
+        />
+        <span
+          className="font-mono text-sm font-bold tracking-[0.25em] uppercase"
+          style={{ color: hero.color }}
+        >
+          {hero.label}
+        </span>
+        <span className="font-mono text-sm tracking-widest"
+              style={{ color: hero.color, opacity: 0.7 }}>
+          <AnimatedDots />
+        </span>
       </div>
 
-      {/* ASSEMBLING RESPONSE final line */}
-      <div style={{ marginTop:14, paddingTop:12, borderTop:'1px solid rgba(245,240,232,0.06)', display:'flex', alignItems:'center', gap:8 }}>
-        <div style={{ display:'flex', gap:3 }}>
-          {[0,1,2].map(i => (
-            <div key={i} style={{ width:4, height:4, borderRadius:'50%', background:'var(--av-muted)', animation:`hero-pulse 1.2s ease-in-out ${i*0.2}s infinite` }}/>
-          ))}
-        </div>
-        <span style={{ fontFamily:"'Rajdhani', sans-serif", fontWeight:700, fontSize:10, letterSpacing:'0.16em', color:'var(--av-muted)' }}>
-          ASSEMBLING RESPONSE
-        </span>
+      {/* Scanning bar — hero color */}
+      <div className="w-full h-0.5 bg-cyber-primary/10 rounded overflow-hidden" style={{ backgroundColor: 'rgba(245,240,232,0.05)' }}>
+        <div
+          className="h-full rounded animate-scan-bar"
+          style={{ backgroundColor: hero.color,
+                   boxShadow: `0 0 6px ${hero.color}` }}
+        />
+      </div>
+
+      {/* Skeleton lines */}
+      <div className="flex flex-col gap-3 mt-2">
+        {[90, 70, 50].map((w, i) => (
+          <div
+            key={i}
+            className="h-3 rounded animate-pulse"
+            style={{
+              width: `${w}%`,
+              backgroundColor: hero.color,
+              opacity: 0.08,
+              animationDelay: `${i * 150}ms`
+            }}
+          />
+        ))}
       </div>
     </div>
   );
+}
+
+function AnimatedDots() {
+  const [dots, setDots] = useState('');
+  useEffect(() => {
+    const t = setInterval(() =>
+      setDots(d => d.length >= 3 ? '' : d + '.'), 400);
+    return () => clearInterval(t);
+  }, []);
+  return <span>{dots}</span>;
 }
 
 function StreamingText({ text, isStreaming }) {
@@ -399,47 +386,64 @@ function DebugIntel({ latency, numChunks }) {
   );
 }
 
-export default function AnswerDisplay({ answer, isLoading, isThinking, isStreaming, confidence, onSelectSuggestion }) {
+export default function AnswerDisplay({ answer, isLoading, isThinking, isStreaming, confidence, onSelectSuggestion, heroMode }) {
     const cleanAnswer = (answer?.answer || '').replace(/^(Answer:|Answer\s*:)\s*/i, '');
+    const EXAMPLE_QUERIES = [
+      "Summarize the key findings of this document",
+      "What are the main conclusions?",
+      "Compare the methodologies described",
+      "List all technical requirements mentioned",
+    ];
+
     // Empty state
     if (!answer && !isLoading && !isThinking) {
         return (
-            <div className="answer-display" style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', minHeight:220, gap:18 }}>
-              {/* Avengers A triangle */}
-              <svg width="64" height="58" viewBox="0 0 64 58" fill="none" style={{ opacity:0.18 }}>
-                <polygon points="32,3 61,55 3,55" stroke="var(--av-thor-lt)" strokeWidth="1.5" fill="none"/>
-                <polygon points="32,15 51,49 13,49" stroke="var(--av-cap-lt)" strokeWidth="0.8" fill="none"/>
-                <circle cx="32" cy="38" r="5" stroke="var(--av-iron-lt)" strokeWidth="1" fill="rgba(192,57,27,0.1)"/>
-                <line x1="32" y1="3" x2="32" y2="26" stroke="var(--av-panther-lt)" strokeWidth="0.6" opacity="0.6"/>
-              </svg>
+          <div className="answer-display">
+            <div className="flex flex-col gap-6 py-4">
 
-              {/* Label */}
-              <p style={{ fontFamily:"'Rajdhani', sans-serif", fontWeight:700, fontSize:11, letterSpacing:'0.2em', textTransform:'uppercase', color:'var(--av-muted)' }}>
-                INTELLIGENCE STANDBY
-              </p>
-
-              {/* 5 hero pulse dots */}
-              <div style={{ display:'flex', gap:10, alignItems:'center' }}>
-                {[
-                  ['#c0391b','iron'],['#1a4a8a','cap'],['#c0a030','thor'],
-                  ['#8b5cf6','panther'],['#16a34a','hulk']
-                ].map(([colour, name], i) => (
-                  <div
-                    key={name}
-                    title={name.toUpperCase()}
-                    style={{
-                      width:6, height:6, borderRadius:'50%',
-                      background: colour, opacity:0.5,
-                      animation:`hero-pulse 2.5s ease-in-out ${i*0.25}s infinite`,
-                    }}
-                  />
-                ))}
+              {/* Empty state header */}
+              <div className="flex items-center gap-3 opacity-40">
+                <div className="h-px flex-1 bg-cyber-primary/30" style={{ backgroundColor: 'rgba(26,74,138,0.3)' }} />
+                <span className="font-mono text-xs tracking-[0.3em] uppercase" style={{ color: 'var(--av-cap-lt)' }}>
+                  Intelligence Standby
+                </span>
+                <div className="h-px flex-1 bg-cyber-primary/30" style={{ backgroundColor: 'rgba(26,74,138,0.3)' }} />
               </div>
 
-              <p style={{ fontFamily:"'Space Mono', monospace", fontSize:11, color:'var(--av-muted)', opacity:0.6 }}>
-                Upload documents and execute a query
-              </p>
+              {/* Example query chips */}
+              <div className="flex flex-col gap-2">
+                <p className="font-mono text-[10px] tracking-widest uppercase mb-1" style={{ color: 'rgba(245,240,232,0.3)' }}>
+                  // Try asking
+                </p>
+                {EXAMPLE_QUERIES.map((q, i) => (
+                  <button
+                    key={i}
+                    onClick={() => onSelectSuggestion && onSelectSuggestion(q)}
+                    className="text-left text-sm px-4 py-3 rounded-lg transition-all duration-200 tracking-wide group"
+                    style={{
+                      fontFamily: "'Space Mono', monospace",
+                      color: 'rgba(245,240,232,0.5)',
+                      border: '1px dashed rgba(26,74,138,0.15)',
+                      backgroundColor: 'transparent'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.color = 'var(--av-cap-lt)';
+                      e.currentTarget.style.borderColor = 'rgba(26,74,138,0.4)';
+                      e.currentTarget.style.backgroundColor = 'rgba(26,74,138,0.05)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.color = 'rgba(245,240,232,0.5)';
+                      e.currentTarget.style.borderColor = 'rgba(26,74,138,0.15)';
+                      e.currentTarget.style.backgroundColor = 'transparent';
+                    }}
+                  >
+                    <span className="mr-2 transition-colors" style={{ color: 'rgba(26,74,138,0.3)' }}>▸</span>
+                    {q}
+                  </button>
+                ))}
+              </div>
             </div>
+          </div>
         );
     }
 
@@ -572,7 +576,7 @@ export default function AnswerDisplay({ answer, isLoading, isThinking, isStreami
     return (
         <div className="answer-display">
             {showSkeleton ? (
-                <ThinkingSkeleton />
+                <HeroThinkingIndicator heroMode={heroMode} />
             ) : (
                 <>
                     <div className="answer-markdown fade-reveal-container">

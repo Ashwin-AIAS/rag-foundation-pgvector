@@ -71,6 +71,8 @@ function App() {
   const [conversationHistory, setConversationHistory] = useState(() => loadHistory());
   const [selectedDocs, setSelectedDocs] = useState([]);
   const [confidence, setConfidence] = useState(null);
+  const [activeHero, setActiveHero] = useState('stark');
+  // App-wide hero theme logic
   const [cmdPaletteOpen, setCmdPaletteOpen] = useState(false);
   const [toast, setToast] = useState({ message: null, type: 'error' });
   const [soundOn, setSoundOn] = useState(true);
@@ -165,6 +167,7 @@ function App() {
     setIsThinking(true);
     setIsStreaming(false);
     setConfidence(null);
+    setActiveHero(heroMode);
     setCurrentAnswer({
       answer: "",
       question: question,
@@ -547,6 +550,7 @@ function App() {
                             isStreaming={isStreaming}
                             confidence={confidence}
                             onSelectSuggestion={handleSuggestionSelect}
+                            heroMode={activeHero}
                           />
                       </motion.div>
                     )}

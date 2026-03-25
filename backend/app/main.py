@@ -1187,3 +1187,23 @@ async def generate_suggestions(
     except Exception as e:
         logger.warning(f"Failed to generate suggested questions: {e}")
         return SuggestionResponse(suggested_questions=[])
+
+@app.get("/query/autocomplete")
+async def autocomplete(q: str = Query(""), limit: int = 5, db: Session = Depends(get_db)):
+    if not q or len(q) < 2:
+        return {"suggestions": []}
+    try:
+        from sqlalchemy import text as sa_text
+        rows = db.execute(sa_text("""
+            SELECT question, MAX(timestamp) as last_used
+            FROM query_logs
+            WHERE question ILIKE :q
+            GROUP BY question
+            ORDER BY last_used DESC
+            LIMIT :limit
+        """), {"q": f"%{q}%", "limit": limit}).fetchall()
+        # Handle both row/object access safely
+        return {"suggestions": [r.question if hasattr(r, 'question') else r[0] for r in rows]}
+    except Exception as e:
+        logger.warning(f"Autocomplete error: {str(e)}")
+        return {"suggestions": []}
