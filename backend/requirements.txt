@@ -8,11 +8,7 @@ sqlalchemy==2.0.25
 # Google Generative AI for Gemini embeddings and generation
 google-genai>=0.5.0
 
-# NLP and Reranking
-sentence-transformers>=2.2.2
-torch --index-url https://download.pytorch.org/whl/cpu
-
-# LangChain dependencies for document ingestion
+# NLP and Document Processing
 langchain==0.1.9
 langchain-community==0.0.24
 pypdf==4.0.1
