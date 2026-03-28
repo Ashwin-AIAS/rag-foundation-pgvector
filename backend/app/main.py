@@ -8,6 +8,7 @@ from typing import List, Dict
 from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, Query, BackgroundTasks
 from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import text as sa_text
 import tempfile
