@@ -19,7 +19,9 @@ export default function LiveVoiceAgent() {
       setStatus('Connecting...');
       
       // 1. Establish WebSocket
-      const ws = new WebSocket('ws://localhost:8000/ws/live-rag');
+      const backendUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+      const wsUrl = backendUrl.replace(/^http/, 'ws') + '/ws/live-rag';
+      const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
       // 2. Setup Audio Context (Force 16kHz for Gemini)
@@ -66,6 +68,12 @@ export default function LiveVoiceAgent() {
         setStatus('Listening');
       };
 
+      ws.onerror = (error) => {
+        console.error("WebSocket Error: ", error);
+        setStatus('Error: WebSocket Connection Failed');
+        setIsActive(false);
+      }
+
       ws.onmessage = async (event) => {
         // We receive incoming audio bytes from Gemini to play
         setStatus('Speaking');
@@ -104,7 +112,8 @@ export default function LiveVoiceAgent() {
 
     } catch (err) {
       console.error(err);
-      setStatus('Error accessing mic or server');
+      setStatus('Error accessing mic or server: ' + err.message);
+      setIsActive(false);
       stopSession();
     }
   };
@@ -178,40 +187,42 @@ export default function LiveVoiceAgent() {
       </div>
 
       <AnimatePresence>
-        {isActive && (
+        {(isActive || status.includes('Error') || status === 'Connecting...') && (
           <motion.div 
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            className="flex items-center gap-2 mt-2"
+            className="flex flex-col items-center gap-2 mt-2"
           >
-            <span style={{ fontFamily: "'Space Mono', monospace", fontSize: '11px', color: status === 'Speaking' ? '#4ade80' : '#f5f0e8', opacity: 0.8 }}>
+            <span style={{ fontFamily: "'Space Mono', monospace", fontSize: '11px', color: status.includes('Error') ? '#ef4444' : (status === 'Speaking' ? '#4ade80' : '#f5f0e8'), opacity: 0.8 }}>
               STATUS: {status.toUpperCase()}
             </span>
-            {status === 'Speaking' && (
-               <div className="flex gap-1 items-center h-4 mx-2">
-                 {[1, 2, 3, 4].map(i => (
-                    <motion.div 
-                      key={i}
-                      animate={{ height: ['4px', '16px', '4px'] }}
-                      transition={{ duration: 0.5, repeat: Infinity, delay: i * 0.1 }}
-                      className="w-1 bg-green-400 rounded-full"
-                    />
-                 ))}
-               </div>
-            )}
-            {status === 'Listening' && (
-               <div className="flex gap-1 items-center h-4 mx-2">
-                 {[1, 2, 3].map(i => (
-                    <motion.div 
-                      key={i}
-                      animate={{ opacity: [0.2, 1, 0.2] }}
-                      transition={{ duration: 1.5, repeat: Infinity, delay: i * 0.2 }}
-                      className="w-1.5 h-1.5 bg-blue-400 rounded-full"
-                    />
-                 ))}
-               </div>
-            )}
+            <div className="flex items-center">
+                {status === 'Speaking' && (
+                   <div className="flex gap-1 items-center h-4 mx-2">
+                     {[1, 2, 3, 4].map(i => (
+                        <motion.div 
+                          key={i}
+                          animate={{ height: ['4px', '16px', '4px'] }}
+                          transition={{ duration: 0.5, repeat: Infinity, delay: i * 0.1 }}
+                          className="w-1 bg-green-400 rounded-full"
+                        />
+                     ))}
+                   </div>
+                )}
+                {status === 'Listening' && (
+                   <div className="flex gap-1 items-center h-4 mx-2">
+                     {[1, 2, 3].map(i => (
+                        <motion.div 
+                          key={i}
+                          animate={{ opacity: [0.2, 1, 0.2] }}
+                          transition={{ duration: 1.5, repeat: Infinity, delay: i * 0.2 }}
+                          className="w-1.5 h-1.5 bg-blue-400 rounded-full"
+                        />
+                     ))}
+                   </div>
+                )}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
