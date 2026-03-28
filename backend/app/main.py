@@ -27,6 +27,7 @@ from app.services.graph_retrieval_service import GraphRetrievalService, is_neo4j
 from app.models.query import QueryRequest, QueryResponse, RetrievedChunk
 from app.models.feedback import FeedbackRequest, FeedbackResponse
 from app.models.document import Feedback, DocumentChunk, Document
+from app.routers.live_rag import router as live_rag_router
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +48,8 @@ app = FastAPI(
     description="Retrieval-Augmented Generation API",
     version="2.0.0"
 )
+
+app.include_router(live_rag_router)
 
 # Configure CORS
 allowed_origins_str = os.getenv(

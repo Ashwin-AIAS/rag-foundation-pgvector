@@ -15,6 +15,7 @@ import AnimatedBackground from './components/AnimatedBackground';
 import CyberCursor from './components/CyberCursor';
 import CommandPalette from './components/CommandPalette';
 import TiltCard from './components/TiltCard';
+import LiveVoiceAgent from './components/LiveVoiceAgent';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const HERO_STATUS = [
@@ -525,6 +526,11 @@ function App() {
 
               {/* Q&A Section */}
               <div className="xl:col-span-2 flex flex-col gap-6">
+                
+                <div className="flex-none p-4 station-card station-cap">
+                  <LiveVoiceAgent />
+                </div>
+
                 <div className="flex-none sticky top-0 z-10 bg-transparent p-4 station-card station-cap">
                   <QuestionInput
 
