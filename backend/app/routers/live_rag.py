@@ -1,5 +1,6 @@
 import logging
 import asyncio
+import time
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from google import genai
 from google.genai import types
@@ -11,6 +12,12 @@ from app.database import SessionLocal
 
 logger = logging.getLogger(__name__)
 
+DEBUG_FILE = "live_debug.log"
+
+def debug_log(msg):
+    with open(DEBUG_FILE, "a", encoding="utf-8") as f:
+        f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - {msg}\n")
+
 router = APIRouter()
 
 # Initialize the Gemini Client
@@ -18,6 +25,7 @@ client = genai.Client(api_key=settings.GEMINI_API_KEY)
 
 async def search_knowledge_base(query: str, source_files: list[str] = None) -> str:
     """Uses Hybrid Search to retrieve context from the RAG database based on the user's spoken query."""
+    debug_log(f"TOOL CALL: search_knowledge_base(query='{query}', source_files={source_files})")
     logger.info(f"Gemini Live API triggered search_knowledge_base for query: '{query}', source_files: {source_files}")
     db = SessionLocal()
     try:
@@ -50,6 +58,7 @@ async def search_knowledge_base(query: str, source_files: list[str] = None) -> s
 @router.websocket("/ws/live-rag")
 async def live_rag_endpoint(websocket: WebSocket):
     await websocket.accept()
+    debug_log("WS: Connection accepted")
     logger.info("WebSocket connection established for Live API.")
     
     config = types.LiveConnectConfig(
@@ -57,11 +66,16 @@ async def live_rag_endpoint(websocket: WebSocket):
         tools=[search_knowledge_base],
         system_instruction=types.Content(
             parts=[types.Part.from_text("You are a helpful and extremely intelligent voice assistant hooked up to the user's personal RAG database. Speak naturally. ALWAYS use the search_knowledge_base tool to answer user questions about their documents or data.")]
+        ),
+        generation_config=types.LiveConnectConfigGenerationConfig(
+            response_modalities=["AUDIO"]
         )
     )
     
     try:
-        async with client.aio.live.connect(model="gemini-3.1-flash-live-preview", config=config) as session:
+        # Use full model path and ensure correct session connect
+        logger.info("Attempting to connect to Gemini Live API with model: models/gemini-3.1-flash-live-preview")
+        async with client.aio.live.connect(model="models/gemini-3.1-flash-live-preview", config=config) as session:
             logger.info("Successfully connected to Gemini Live API.")
             
             # Task to receive audio from frontend and send to Gemini
@@ -70,7 +84,11 @@ async def live_rag_endpoint(websocket: WebSocket):
                     while True:
                         # Receive binary PCM audio from React client
                         data = await websocket.receive_bytes()
-                        await session.send(input={"data": data, "mime_type": "audio/pcm;rate=16000"}, end_of_turn=False)
+                        if len(data) > 0:
+                            # Log very occasionally to avoid spam, but confirm data flow
+                            if asyncio.get_event_loop().time() % 5 < 0.1:
+                                logger.debug(f"Received {len(data)} bytes of audio data from client.")
+                            await session.send(input={"data": data, "mime_type": "audio/pcm;rate=16000"}, end_of_turn=False)
                 except WebSocketDisconnect:
                     logger.info("Client disconnected.")
                 except Exception as e:
@@ -87,7 +105,13 @@ async def live_rag_endpoint(websocket: WebSocket):
                                 for part in model_turn.parts:
                                     if part.inline_data:
                                         # Send binary PCM audio back to React client
+                                        if asyncio.get_event_loop().time() % 5 < 0.1:
+                                            logger.debug(f"Sending {len(part.inline_data.data)} bytes of audio back to client.")
                                         await websocket.send_bytes(part.inline_data.data)
+                                    if part.text:
+                                        logger.info(f"Gemini responded with text: {part.text}")
+                                    if part.call:
+                                        logger.info(f"Gemini requested tool call: {part.call}")
                 except Exception as e:
                     logger.error(f"Error receiving from Gemini: {e}")
 
