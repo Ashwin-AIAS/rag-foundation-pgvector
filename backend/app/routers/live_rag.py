@@ -61,21 +61,40 @@ async def live_rag_endpoint(websocket: WebSocket):
     debug_log("WS: Connection accepted")
     logger.info("WebSocket connection established for Live API.")
     
-    config = types.LiveConnectConfig(
-        response_modalities=[types.LiveConnectConfigResponseModalities.AUDIO],
-        tools=[search_knowledge_base],
-        system_instruction=types.Content(
-            parts=[types.Part.from_text("You are a helpful and extremely intelligent voice assistant hooked up to the user's personal RAG database. Speak naturally. ALWAYS use the search_knowledge_base tool to answer user questions about their documents or data.")]
-        ),
-        generation_config=types.LiveConnectConfigGenerationConfig(
-            response_modalities=["AUDIO"]
-        )
-    )
+    model_name = "models/gemini-3.1-flash-live-preview"
     
     try:
-        # Use full model path and ensure correct session connect
-        logger.info("Attempting to connect to Gemini Live API with model: models/gemini-3.1-flash-live-preview")
-        async with client.aio.live.connect(model="models/gemini-3.1-flash-live-preview", config=config) as session:
+        debug_log("Initializing Gemini Session...")
+        # Use a more flexible config approach for different SDK versions
+        live_config = {
+            "model": model_name,
+            "config": {
+                "response_modalities": ["AUDIO"],
+                "generation_config": {
+                    "response_modalities": ["AUDIO"]
+                }
+            }
+        }
+        
+        # Also try typed version if supported
+        try:
+            typed_config = types.LiveConnectConfig(
+                response_modalities=[types.LiveConnectConfigResponseModalities.AUDIO],
+                tools=[search_knowledge_base],
+                system_instruction=types.Content(
+                    parts=[types.Part.from_text("You are a helpful and extremely intelligent voice assistant hooked up to the user's personal RAG database. Speak naturally. ALWAYS use the search_knowledge_base tool to answer user questions about their documents or data.")]
+                ),
+                generation_config=types.LiveConnectConfigGenerationConfig(
+                    response_modalities=["AUDIO"]
+                )
+            )
+            debug_log("Using typed LiveConnectConfig")
+        except Exception as e:
+            debug_log(f"Typed config not supported, falling back to dict: {e}")
+            typed_config = live_config["config"]
+
+        async with client.aio.live.connect(model=model_name, config=typed_config) as session:
+            debug_log("Connected to Gemini Live API")
             logger.info("Successfully connected to Gemini Live API.")
             
             # Task to receive audio from frontend and send to Gemini
