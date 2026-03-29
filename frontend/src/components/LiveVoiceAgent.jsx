@@ -19,8 +19,10 @@ export default function LiveVoiceAgent() {
       setStatus('Connecting...');
       
       // 1. Establish WebSocket
-      const backendUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+      // 1. Establish WebSocket
+      const backendUrl = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000').replace(/\/$/, '');
       const wsUrl = backendUrl.replace(/^http/, 'ws') + '/ws/live-rag';
+      console.log("Connecting to WebSocket:", wsUrl);
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
@@ -69,8 +71,8 @@ export default function LiveVoiceAgent() {
       };
 
       ws.onerror = (error) => {
-        console.error("WebSocket Error: ", error);
-        setStatus('Error: WebSocket Connection Failed');
+        console.error("WebSocket Error Object: ", error);
+        setStatus('Error: Connection Failed (Check console/backend)');
         setIsActive(false);
       }
 
