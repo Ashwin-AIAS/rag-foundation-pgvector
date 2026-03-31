@@ -61,7 +61,7 @@ async def live_rag_endpoint(websocket: WebSocket):
     debug_log("WS: Connection accepted")
     logger.info("WebSocket connection established for Live API.")
     
-    model_name = "models/gemini-3.1-flash-live-preview"
+    model_name = "gemini-3.1-flash-live-preview"
     
     try:
         debug_log("Initializing Gemini Session...")
@@ -79,12 +79,24 @@ async def live_rag_endpoint(websocket: WebSocket):
         # Also try typed version if supported
         try:
             typed_config = types.LiveConnectConfig(
-                response_modalities=[types.LiveConnectConfigResponseModalities.AUDIO],
-                tools=[search_knowledge_base],
+                response_modalities=["AUDIO"],
+                tools=[types.Tool(function_declarations=[
+                    types.FunctionDeclaration(
+                        name="search_knowledge_base",
+                        description="Uses Hybrid Search to retrieve context from the RAG database based on the user's spoken query.",
+                        parameters={
+                            "type": "OBJECT",
+                            "properties": {
+                                "query": {"type": "STRING", "description": "The user's spoken query to search for"},
+                                "source_files": {"type": "ARRAY", "items": {"type": "STRING"}, "description": "Optional list of files to search"}
+                            }
+                        }
+                    )
+                ])],
                 system_instruction=types.Content(
-                    parts=[types.Part.from_text("You are a helpful and extremely intelligent voice assistant hooked up to the user's personal RAG database. Speak naturally. ALWAYS use the search_knowledge_base tool to answer user questions about their documents or data.")]
+                    parts=[types.Part(text="You are a helpful and extremely intelligent voice assistant hooked up to the user's personal RAG database. Speak naturally. ALWAYS use the search_knowledge_base tool to answer user questions about their documents or data.")]
                 ),
-                generation_config=types.LiveConnectConfigGenerationConfig(
+                generation_config=types.GenerationConfig(
                     response_modalities=["AUDIO"]
                 )
             )
@@ -107,7 +119,8 @@ async def live_rag_endpoint(websocket: WebSocket):
                             # Log very occasionally to avoid spam, but confirm data flow
                             if asyncio.get_event_loop().time() % 5 < 0.1:
                                 logger.debug(f"Received {len(data)} bytes of audio data from client.")
-                            await session.send(input={"data": data, "mime_type": "audio/pcm;rate=16000"}, end_of_turn=False)
+                            # For SDK 1.67.0, use media_chunks with types.Blob
+                            await session.send(input=types.LiveClientRealtimeInput(media_chunks=[types.Blob(data=data, mime_type="audio/pcm;rate=16000")]), end_of_turn=False)
                 except WebSocketDisconnect:
                     logger.info("Client disconnected.")
                 except Exception as e:

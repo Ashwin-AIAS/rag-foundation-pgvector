@@ -6,7 +6,7 @@ python-dotenv==1.0.0
 sqlalchemy==2.0.25
 
 # Google Generative AI for Gemini embeddings and generation
-google-genai>=0.5.0
+google-genai==1.67.0
 
 # NLP and Document Processing
 langchain==0.1.9
