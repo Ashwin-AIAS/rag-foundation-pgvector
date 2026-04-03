@@ -130,6 +130,30 @@ async def live_rag_endpoint(websocket: WebSocket):
             async def send_to_client():
                 try:
                     async for response in session.receive():
+                        # --- Handle tool/function calls ---
+                        if response.tool_call:
+                            for fn_call in response.tool_call.function_calls:
+                                debug_log(f"TOOL CALL dispatched: {fn_call.name}({fn_call.args})")
+                                logger.info(f"Gemini requested tool call: {fn_call.name}({fn_call.args})")
+                                result = "Tool not found."
+                                if fn_call.name == "search_knowledge_base":
+                                    result = await search_knowledge_base(
+                                        query=fn_call.args.get("query", ""),
+                                        source_files=fn_call.args.get("source_files"),
+                                    )
+                                debug_log(f"TOOL RESULT ({fn_call.name}): {result[:200]}")
+                                tool_response = types.LiveClientToolResponse(
+                                    function_responses=[
+                                        types.FunctionResponse(
+                                            name=fn_call.name,
+                                            id=fn_call.id,
+                                            response={"result": result},
+                                        )
+                                    ]
+                                )
+                                await session.send(input=tool_response)
+
+                        # --- Handle audio / text model output ---
                         server_content = response.server_content
                         if server_content is not None:
                             model_turn = server_content.model_turn
@@ -142,8 +166,6 @@ async def live_rag_endpoint(websocket: WebSocket):
                                         await websocket.send_bytes(part.inline_data.data)
                                     if part.text:
                                         logger.info(f"Gemini responded with text: {part.text}")
-                                    if part.call:
-                                        logger.info(f"Gemini requested tool call: {part.call}")
                 except Exception as e:
                     logger.error(f"Error receiving from Gemini: {e}")
 
