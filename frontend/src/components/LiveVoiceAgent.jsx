@@ -18,13 +18,29 @@ export default function LiveVoiceAgent() {
     try {
       setStatus('Connecting...');
       
-      // 1. Establish WebSocket
-      // 1. Establish WebSocket
-      const backendUrl = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000').replace(/\/$/, '');
+      // 1. Validate and Establish WebSocket
+      if (!import.meta.env.VITE_API_BASE_URL) {
+        console.warn('[LiveAgent] VITE_API_BASE_URL is not set — Live Agent will only work on localhost');
+      }
+      const rawBackendBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+      if (!rawBackendBase.startsWith('http')) {
+        throw new Error('VITE_API_BASE_URL must start with http:// or https://');
+      }
+      const backendUrl = rawBackendBase.replace(/\/$/, '');
       const wsUrl = backendUrl.replace(/^http/, 'ws') + '/ws/live-rag';
       console.log("Connecting to WebSocket:", wsUrl);
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
+
+      // Connection Timeout Guard
+      const connectionTimeout = setTimeout(() => {
+        if (ws.readyState !== WebSocket.OPEN) {
+          ws.close();
+          setStatus('Error: Connection Timed Out');
+          setIsActive(false);
+          stopSession();
+        }
+      }, 10000);
 
       // 2. Setup Audio Context (Force 16kHz for Gemini)
       const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -33,14 +49,26 @@ export default function LiveVoiceAgent() {
       playbackTimeRef.current = actx.currentTime;
 
       // 3. Request Microphone
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        audio: {
-          channelCount: 1,
-          sampleRate: 16000,
-          echoCancellation: true,
-          noiseSuppression: true
-        } 
-      });
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ 
+          audio: {
+            channelCount: 1,
+            sampleRate: 16000,
+            echoCancellation: true,
+            noiseSuppression: true
+          } 
+        });
+      } catch (micError) {
+        clearTimeout(connectionTimeout);
+        if (micError.name === 'NotAllowedError') {
+          throw new Error('Microphone Access Denied. Please allow mic usage.');
+        } else if (micError.name === 'NotFoundError') {
+          throw new Error('No microphone device found on this system.');
+        } else {
+          throw new Error(`Microphone Access Error: ${micError.name}`);
+        }
+      }
 
       // 4. Setup Audio Processing for Input
       microphoneRef.current = actx.createMediaStreamSource(stream);
@@ -66,15 +94,18 @@ export default function LiveVoiceAgent() {
 
       // 5. Handle WebSocket Events
       ws.onopen = () => {
+        clearTimeout(connectionTimeout);
         setIsActive(true);
         setStatus('Listening');
       };
 
       ws.onerror = (error) => {
+        clearTimeout(connectionTimeout);
         console.error("WebSocket Error Object: ", error);
         setStatus('Error: Connection Failed (Check console/backend)');
         setIsActive(false);
-      }
+        stopSession();
+      };
 
       ws.onmessage = async (event) => {
         // We receive incoming audio bytes from Gemini to play
@@ -114,7 +145,9 @@ export default function LiveVoiceAgent() {
 
     } catch (err) {
       console.error(err);
-      setStatus('Error accessing mic or server: ' + err.message);
+      setStatus(err.message.includes('Microphone') || err.message.includes('VITE_API_BASE_URL') ? 
+        `Error: ${err.message}` : 
+        'Error accessing mic or server: ' + err.message);
       setIsActive(false);
       stopSession();
     }

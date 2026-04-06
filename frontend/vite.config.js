@@ -6,6 +6,10 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
+      '/ws': {
+        target: 'http://localhost:8000',
+        ws: true
+      },
       '/ingest': 'http://localhost:8000',
       '/query': 'http://localhost:8000',
       '/health': 'http://localhost:8000',
