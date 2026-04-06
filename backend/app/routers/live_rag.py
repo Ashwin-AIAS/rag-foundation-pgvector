@@ -1,3 +1,4 @@
+import json
 import logging
 import asyncio
 import time
@@ -20,8 +21,9 @@ def debug_log(msg):
 
 router = APIRouter()
 
-# Initialize the Gemini Client
-client = genai.Client(api_key=settings.GEMINI_API_KEY)
+# ── Fix #2: Client is NOT initialised at module level.
+# It is created lazily inside the WebSocket handler so a missing
+# GEMINI_API_KEY does not crash the Uvicorn process on startup.
 
 async def search_knowledge_base(query: str, source_files: list[str] = None) -> str:
     """Uses Hybrid Search to retrieve context from the RAG database based on the user's spoken query."""
@@ -31,22 +33,22 @@ async def search_knowledge_base(query: str, source_files: list[str] = None) -> s
     try:
         embedding_service = EmbeddingService()
         query_embedding = embedding_service.embed_query(query)
-        
+
         retrieval_service = RetrievalService(db)
         chunks = retrieval_service.retrieve(
             query_embedding=query_embedding,
-            top_k=5, # Limit to 5 for concise audio context
+            top_k=5,  # Limit to 5 for concise audio context
             source_files=source_files,
             user_question=query
         )
-        
+
         if not chunks:
             return "No relevant information found in the database."
-            
+
         context = ""
         for i, chunk in enumerate(chunks):
             context += f"\n--- Source {i+1}: {chunk['source_file']} ---\n{chunk['chunk_text']}\n"
-        
+
         logger.info(f"Retrieved {len(chunks)} chunks for Gemini Live.")
         return context
     except Exception as e:
@@ -55,82 +57,97 @@ async def search_knowledge_base(query: str, source_files: list[str] = None) -> s
     finally:
         db.close()
 
+
 @router.websocket("/ws/live-rag")
 async def live_rag_endpoint(websocket: WebSocket):
     await websocket.accept()
     debug_log("WS: Connection accepted")
     logger.info("WebSocket connection established for Live API.")
-    
-    model_name = "gemini-3.1-flash-live-preview"
-    
+
+    # ── Fix #2: Guard — reject immediately if the API key is not configured ──
+    if not settings.GEMINI_API_KEY:
+        error_payload = json.dumps({"error": "GEMINI_API_KEY is not configured on the server."})
+        await websocket.send_text(error_payload)
+        await websocket.close(code=1011)
+        logger.error("Live RAG WebSocket closed: GEMINI_API_KEY missing.")
+        return
+
+    # ── Fix #1: Correct, valid Gemini Live model name ──
+    model_name = "gemini-2.0-flash-live-001"
+
+    # ── Fix #2: Lazy client construction (only runs when a connection arrives) ──
+    client = genai.Client(api_key=settings.GEMINI_API_KEY)
+
     try:
         debug_log("Initializing Gemini Session...")
-        # Use a more flexible config approach for different SDK versions
-        live_config = {
-            "model": model_name,
-            "config": {
-                "response_modalities": ["AUDIO"],
-                "generation_config": {
-                    "response_modalities": ["AUDIO"]
-                }
-            }
-        }
-        
-        # Also try typed version if supported
-        try:
-            typed_config = types.LiveConnectConfig(
-                response_modalities=["AUDIO"],
-                tools=[types.Tool(function_declarations=[
-                    types.FunctionDeclaration(
-                        name="search_knowledge_base",
-                        description="Uses Hybrid Search to retrieve context from the RAG database based on the user's spoken query.",
-                        parameters={
-                            "type": "OBJECT",
-                            "properties": {
-                                "query": {"type": "STRING", "description": "The user's spoken query to search for"},
-                                "source_files": {"type": "ARRAY", "items": {"type": "STRING"}, "description": "Optional list of files to search"}
-                            }
-                        }
-                    )
-                ])],
-                system_instruction=types.Content(
-                    parts=[types.Part(text="You are a helpful and extremely intelligent voice assistant hooked up to the user's personal RAG database. Speak naturally. ALWAYS use the search_knowledge_base tool to answer user questions about their documents or data.")]
-                ),
-                generation_config=types.GenerationConfig(
-                    response_modalities=["AUDIO"]
+
+        # ── Fix #4: Use typed types.Schema for FunctionDeclaration parameters
+        # so function/tool calls actually fire through the Live API.
+        typed_config = types.LiveConnectConfig(
+            response_modalities=[types.Modality.AUDIO],
+            tools=[types.Tool(function_declarations=[
+                types.FunctionDeclaration(
+                    name="search_knowledge_base",
+                    description=(
+                        "Uses Hybrid Search to retrieve context from the RAG database "
+                        "based on the user's spoken query."
+                    ),
+                    parameters=types.Schema(
+                        type=types.Type.OBJECT,
+                        properties={
+                            "query": types.Schema(
+                                type=types.Type.STRING,
+                                description="The user's spoken query to search for"
+                            ),
+                            "source_files": types.Schema(
+                                type=types.Type.ARRAY,
+                                items=types.Schema(type=types.Type.STRING),
+                                description="Optional list of document filenames to restrict the search to"
+                            ),
+                        },
+                        required=["query"],
+                    ),
                 )
-            )
-            debug_log("Using typed LiveConnectConfig")
-        except Exception as e:
-            debug_log(f"Typed config not supported, falling back to dict: {e}")
-            typed_config = live_config["config"]
+            ])],
+            system_instruction=types.Content(
+                parts=[types.Part(text=(
+                    "You are a helpful and extremely intelligent voice assistant hooked up to "
+                    "the user's personal RAG database. Speak naturally and concisely. "
+                    "ALWAYS use the search_knowledge_base tool to answer questions about the "
+                    "user's documents or data before responding."
+                ))]
+            ),
+        )
+        debug_log("LiveConnectConfig built with typed Schema.")
 
         async with client.aio.live.connect(model=model_name, config=typed_config) as session:
             debug_log("Connected to Gemini Live API")
             logger.info("Successfully connected to Gemini Live API.")
-            
-            # Task to receive audio from frontend and send to Gemini
+
+            # Task: receive binary PCM audio from frontend → forward to Gemini
             async def receive_from_client():
                 try:
                     while True:
-                        # Receive binary PCM audio from React client
                         data = await websocket.receive_bytes()
                         if len(data) > 0:
-                            # Log very occasionally to avoid spam, but confirm data flow
                             if asyncio.get_event_loop().time() % 5 < 0.1:
                                 logger.debug(f"Received {len(data)} bytes of audio data from client.")
-                            # For SDK 1.67.0, use media_chunks with types.Blob
-                            await session.send(input=types.LiveClientRealtimeInput(media_chunks=[types.Blob(data=data, mime_type="audio/pcm;rate=16000")]), end_of_turn=False)
+                            await session.send(
+                                input=types.LiveClientRealtimeInput(
+                                    media_chunks=[types.Blob(data=data, mime_type="audio/pcm;rate=16000")]
+                                ),
+                                end_of_turn=False
+                            )
                 except WebSocketDisconnect:
-                    logger.info("Client disconnected.")
+                    logger.info("Client disconnected from Live RAG.")
                 except Exception as e:
-                    logger.error(f"Error receiving from client: {e}")
+                    logger.error(f"Error receiving audio from client: {e}")
 
-            # Task to receive audio from Gemini and send to frontend
+            # Task: receive Gemini responses (audio / tool calls) → forward to frontend
             async def send_to_client():
                 try:
                     async for response in session.receive():
-                        # --- Handle tool/function calls ---
+                        # ── Handle tool / function calls ──
                         if response.tool_call:
                             for fn_call in response.tool_call.function_calls:
                                 debug_log(f"TOOL CALL dispatched: {fn_call.name}({fn_call.args})")
@@ -153,28 +170,35 @@ async def live_rag_endpoint(websocket: WebSocket):
                                 )
                                 await session.send(input=tool_response)
 
-                        # --- Handle audio / text model output ---
+                        # ── Handle audio / text model output ──
                         server_content = response.server_content
                         if server_content is not None:
                             model_turn = server_content.model_turn
                             if model_turn is not None:
                                 for part in model_turn.parts:
                                     if part.inline_data:
-                                        # Send binary PCM audio back to React client
                                         if asyncio.get_event_loop().time() % 5 < 0.1:
-                                            logger.debug(f"Sending {len(part.inline_data.data)} bytes of audio back to client.")
+                                            logger.debug(
+                                                f"Sending {len(part.inline_data.data)} bytes of "
+                                                f"audio back to client."
+                                            )
                                         await websocket.send_bytes(part.inline_data.data)
                                     if part.text:
                                         logger.info(f"Gemini responded with text: {part.text}")
                 except Exception as e:
                     logger.error(f"Error receiving from Gemini: {e}")
 
-            # Run both infinitely until connection drops
+            # Run both tasks concurrently until the connection drops
             await asyncio.gather(receive_from_client(), send_to_client())
-            
+
     except Exception as e:
+        # ── Fix #3: Send a readable JSON error frame so the frontend can
+        # display the real failure reason instead of a silent disconnect. ──
         logger.error(f"Failed to connect to Gemini Live API: {e}")
+        debug_log(f"FATAL: {e}")
         try:
-            await websocket.close()
+            error_payload = json.dumps({"error": str(e)})
+            await websocket.send_text(error_payload)
+            await websocket.close(code=1011)  # RFC 6455 — Internal error
         except Exception:
             pass

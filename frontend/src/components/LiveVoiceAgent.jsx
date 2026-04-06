@@ -108,7 +108,23 @@ export default function LiveVoiceAgent() {
       };
 
       ws.onmessage = async (event) => {
-        // We receive incoming audio bytes from Gemini to play
+        // ── Fix #5: Handle JSON text error frames sent by the backend ──
+        // The backend sends a text frame with { error: "..." } before closing
+        // if it fails to connect to Gemini (e.g. bad model name, missing API key).
+        if (typeof event.data === 'string') {
+          try {
+            const msg = JSON.parse(event.data);
+            if (msg.error) {
+              setStatus(`Error: ${msg.error}`);
+              stopSession();
+            }
+          } catch (_) {
+            // Non-JSON text frame — ignore
+          }
+          return;
+        }
+
+        // Binary PCM audio path
         setStatus('Speaking');
         const arrayBuffer = await event.data.arrayBuffer();
         
