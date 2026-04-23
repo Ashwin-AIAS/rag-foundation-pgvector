@@ -30,83 +30,102 @@ class GenerationService:
     
     def generate(self, prompt: str) -> str:
         """
-        Generate an answer using the Gemini API with retry logic.
+        Generate an answer using the Gemini API with retry and fallback logic.
         """
         config = types.GenerateContentConfig(
             temperature=self.temperature,
             max_output_tokens=self.max_tokens
         )
         
-        last_error = None
-        for attempt in range(MAX_RETRIES):
-            try:
-                response = self._client.models.generate_content(
-                    model=self.model_name,
-                    contents=prompt,
-                    config=config
-                )
-                
-                text = response.text
-                logging.debug(f"Generated answer length: {len(text)} chars")
-                
-                return text.strip()
-                
-            except Exception as e:
-                last_error = e
-                error_str = str(e).lower()
-                if "429" in error_str or "quota" in error_str or "rate" in error_str or "resource" in error_str:
-                    delay = INITIAL_RETRY_DELAY * (2 ** attempt)
-                    logger.warning(f"Rate limited (attempt {attempt+1}/{MAX_RETRIES}), retrying in {delay}s...")
-                    time.sleep(delay)
-                else:
-                    raise Exception(f"Generation failed: {str(e)}")
+        models_to_try = [self.model_name, "gemini-2.0-flash", "gemini-1.5-flash"]
+        models_to_try = list(dict.fromkeys(models_to_try))
         
-        raise Exception(f"Generation failed after {MAX_RETRIES} retries: {str(last_error)}")
+        last_error = None
+        for current_model in models_to_try:
+            for attempt in range(MAX_RETRIES):
+                try:
+                    response = self._client.models.generate_content(
+                        model=current_model,
+                        contents=prompt,
+                        config=config
+                    )
+                    
+                    text = response.text
+                    logging.debug(f"Generated answer length: {len(text)} chars via {current_model}")
+                    return text.strip()
+                    
+                except Exception as e:
+                    last_error = e
+                    error_str = str(e).lower()
+                    
+                    if "503" in error_str or "unavailable" in error_str or "high demand" in error_str:
+                        logger.warning(f"Model {current_model} is unavailable (503). Switching to fallback...")
+                        break
+                        
+                    elif "429" in error_str or "quota" in error_str or "rate" in error_str or "resource" in error_str:
+                        delay = INITIAL_RETRY_DELAY * (2 ** attempt)
+                        logger.warning(f"Rate limited on {current_model} (attempt {attempt+1}/{MAX_RETRIES}), retrying in {delay}s...")
+                        time.sleep(delay)
+                    else:
+                        logger.error(f"Generation failed on {current_model}: {str(e)}")
+                        break
+        
+        raise Exception(f"Generation failed after trying all fallback models. Last error: {str(last_error)}")
 
     def stream_generate(self, prompt: str):
         """
-        Generate a streaming answer using the Gemini API with retry logic.
+        Generate a streaming answer using the Gemini API with retry and fallback logic.
         
-        Retries on rate-limit errors with exponential backoff.
+        Retries on rate-limit errors with exponential backoff, and falls back
+        to alternative models if 503 unavailable occurs.
         """
         config = types.GenerateContentConfig(
             temperature=self.temperature,
             max_output_tokens=self.max_tokens
         )
         
-        last_error = None
-        for attempt in range(MAX_RETRIES):
-            try:
-                response = self._client.models.generate_content_stream(
-                    model=self.model_name,
-                    contents=prompt,
-                    config=config
-                )
-                
-                token_count = 0
-                for chunk in response:
-                    try:
-                        if chunk.text:
-                            token_count += 1
-                            yield chunk.text
-                    except Exception as ve:
-                        logger.warning(f"Chunk error: {ve}")
-                        continue
-                
-                logger.info(f"Stream completed: {token_count} tokens yielded")
-                return
-                    
-            except Exception as e:
-                last_error = e
-                error_str = str(e).lower()
-                if "429" in error_str or "quota" in error_str or "rate" in error_str or "resource" in error_str:
-                    delay = INITIAL_RETRY_DELAY * (2 ** attempt)
-                    logger.warning(f"Rate limited (attempt {attempt+1}/{MAX_RETRIES}), retrying in {delay}s...")
-                    time.sleep(delay)
-                else:
-                    logger.error(f"Streaming generation failed: {str(e)}")
-                    yield f"Error generating answer: {str(e)}"
-                    return
+        models_to_try = [self.model_name, "gemini-2.0-flash", "gemini-1.5-flash"]
+        models_to_try = list(dict.fromkeys(models_to_try))
         
-        logger.error(f"Stream failed after {MAX_RETRIES} retries: {last_error}")
-        yield f"Error: Rate limit exceeded. Please wait a moment and try again."
+        last_error = None
+        for current_model in models_to_try:
+            for attempt in range(MAX_RETRIES):
+                try:
+                    response = self._client.models.generate_content_stream(
+                        model=current_model,
+                        contents=prompt,
+                        config=config
+                    )
+                    
+                    token_count = 0
+                    for chunk in response:
+                        try:
+                            if chunk.text:
+                                token_count += 1
+                                yield chunk.text
+                        except Exception as ve:
+                            logger.warning(f"Chunk error: {ve}")
+                            continue
+                    
+                    if token_count > 0:
+                        logger.info(f"Stream completed using model {current_model}: {token_count} tokens yielded")
+                        return
+                    
+                except Exception as e:
+                    last_error = e
+                    error_str = str(e).lower()
+                    
+                    if "503" in error_str or "unavailable" in error_str or "high demand" in error_str:
+                        logger.warning(f"Model {current_model} is unavailable (503). Switching to fallback model immediately...")
+                        break
+                        
+                    elif "429" in error_str or "quota" in error_str or "rate" in error_str or "resource" in error_str:
+                        delay = INITIAL_RETRY_DELAY * (2 ** attempt)
+                        logger.warning(f"Rate limited on {current_model} (attempt {attempt+1}/{MAX_RETRIES}), retrying in {delay}s...")
+                        time.sleep(delay)
+                    else:
+                        logger.error(f"Streaming generation failed on {current_model}: {str(e)}")
+                        break
+        
+        logger.error(f"Stream failed after trying all fallback models: {last_error}")
+        yield f"Error generating answer after fallbacks. Last error: {str(last_error)}"
