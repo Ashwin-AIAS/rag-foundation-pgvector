@@ -61,6 +61,15 @@ class Settings:
     GEMINI_EMBEDDING_MODEL: str = os.getenv("GEMINI_EMBEDDING_MODEL", "gemini-embedding-001")
     GENERATION_TEMPERATURE: float = float(os.getenv("GENERATION_TEMPERATURE", "0.0"))
     GENERATION_MAX_TOKENS: int = int(os.getenv("GENERATION_MAX_TOKENS", "8192"))
+
+    # Vision RAG settings
+    VISION_ENABLED: bool = os.getenv("VISION_ENABLED", "true").lower() == "true"
+    VISION_SERVICE_URL: str = os.getenv("VISION_SERVICE_URL", "http://vision-service:8001")
+    YOLO26_MODEL_PATH: str = os.getenv("YOLO26_MODEL_PATH", "yolo26n.pt")
+    YOLO26_CONFIDENCE: float = float(os.getenv("YOLO26_CONF", "0.4"))
+    VISION_DEMO_MODE: bool = os.getenv("VISION_DEMO_MODE", "true").lower() == "true"
+    OCR_ENGINE: str = os.getenv("OCR_ENGINE", "easyocr")
+
     
     @property
     def database_url(self) -> str:

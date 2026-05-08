@@ -29,6 +29,7 @@ from app.models.query import QueryRequest, QueryResponse, RetrievedChunk
 from app.models.feedback import FeedbackRequest, FeedbackResponse
 from app.models.document import Feedback, DocumentChunk, Document
 from app.routers.live_rag import router as live_rag_router
+from app.routers.vision import router as vision_router
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +52,7 @@ app = FastAPI(
 )
 
 app.include_router(live_rag_router)
+app.include_router(vision_router)
 
 # Configure CORS
 allowed_origins_str = os.getenv(
@@ -207,9 +209,26 @@ def create_query_logs_table():
             except Exception as gin_err:
                 conn.rollback()
                 logger.warning(f"GIN index on search_vector skipped (column may not exist): {gin_err}")
+
+            # ── machine_registry table for Vision-RAG ──
+            conn.execute(sa_text("""
+                CREATE TABLE IF NOT EXISTS machine_registry (
+                    id VARCHAR(36) PRIMARY KEY,
+                    machine_id VARCHAR(100) NOT NULL UNIQUE,
+                    machine_name VARCHAR(255) NOT NULL,
+                    manufacturer VARCHAR(255),
+                    model_number VARCHAR(100),
+                    document_names TEXT[] DEFAULT '{}',
+                    error_code_pattern VARCHAR(200),
+                    created_at TIMESTAMPTZ DEFAULT NOW()
+                )
+            """))
+            conn.commit()
+            logger.info("machine_registry table ensured.")
+
         create_performance_indexes(engine)
-        
         logger.info("Database initialized (tables + vector index + ANALYZE)")
+
     except Exception as e:
         logger.error(f"Failed to initialize database: {e}")
 

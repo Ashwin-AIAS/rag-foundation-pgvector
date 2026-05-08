@@ -16,6 +16,7 @@ import CyberCursor from './components/CyberCursor';
 import CommandPalette from './components/CommandPalette';
 import TiltCard from './components/TiltCard';
 import LiveVoiceAgent from './components/LiveVoiceAgent';
+import VisionTab from './components/VisionTab';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const HERO_STATUS = [
@@ -80,8 +81,8 @@ function App() {
 
   // Ref for cancelling in-flight requests
   const abortControllerRef = useRef(null);
-  // Ref for auto-scrolling to the answer
   const answerRef = useRef(null);
+  const [activeTab, setActiveTab] = useState('rag'); // 'rag' | 'vision'
 
   useEffect(() => {
     fetchDocuments();
@@ -467,6 +468,42 @@ function App() {
           </div>
 
           <div className="flex-1 overflow-y-auto custom-scrollbar p-3 sm:p-5 lg:p-7">
+
+            {/* Tab switcher */}
+            <div style={{ display: 'flex', gap: 8, marginBottom: 20, borderBottom: '1px solid rgba(245,240,232,0.08)', paddingBottom: 12 }}>
+              {[
+                { id: 'rag', label: '🧠 RAG Terminal' },
+                { id: 'vision', label: '⚙️ Vision-RAG' },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  style={{
+                    padding: '7px 18px',
+                    borderRadius: 8,
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontWeight: 700,
+                    fontSize: '0.82rem',
+                    letterSpacing: '0.06em',
+                    background: activeTab === tab.id
+                      ? 'linear-gradient(135deg, rgba(0,212,255,0.15), rgba(123,47,247,0.15))'
+                      : 'rgba(255,255,255,0.03)',
+                    color: activeTab === tab.id ? '#00d4ff' : 'rgba(245,240,232,0.4)',
+                    borderBottom: activeTab === tab.id ? '2px solid #00d4ff' : '2px solid transparent',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Vision Tab */}
+            {activeTab === 'vision' && <VisionTab />}
+
+            {/* RAG Tab */}
+            {activeTab === 'rag' && (
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 max-w-[1600px] mx-auto w-full">
 
               {/* File Upload + Document Selector Section */}
@@ -564,7 +601,8 @@ function App() {
                 </div>
               </div>
 
-            </div>
+            </div>{/* end RAG grid */}
+            )}{/* end RAG tab */}
           </div>
         </motion.main>
 
