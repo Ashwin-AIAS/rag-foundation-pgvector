@@ -601,8 +601,8 @@ function App() {
                 </div>
               </div>
 
-            </div>{/* end RAG grid */}
-            )}{/* end RAG tab */}
+            </div>
+            )}
           </div>
         </motion.main>
 
