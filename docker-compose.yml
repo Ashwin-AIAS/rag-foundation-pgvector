@@ -39,7 +39,7 @@ services:
       # Vision-service internal URL (Docker bridge network — not exposed externally)
       VISION_SERVICE_URL: http://vision-service:8001
       VISION_ENABLED: "true"
-      VISION_DEMO_MODE: "true"
+      VISION_DEMO_MODE: "false"
     ports:
       - "8000:8000"
     volumes:
@@ -70,7 +70,7 @@ services:
     environment:
       YOLO26_MODEL_PATH: yolo26n.pt
       YOLO26_CONF: "0.4"
-      VISION_DEMO_MODE: "true"
+      VISION_DEMO_MODE: "false"
       OCR_ENGINE: easyocr
     # No public port exposure — internal Docker network only
     # Remove the comment below ONLY for local debugging
@@ -78,6 +78,7 @@ services:
     #   - "8001:8001"
     volumes:
       - yolo_models:/root/.config/ultralytics   # Cache YOLO weights across restarts
+      - easyocr_models:/root/.EasyOCR           # Cache EasyOCR models across restarts
       - ./vision_service/app:/app/app
     restart: unless-stopped
 
@@ -96,3 +97,4 @@ volumes:
   postgres_data:
   neo4j_data:
   yolo_models:    # Persists downloaded YOLO26n weights across container restarts
+  easyocr_models: # Persists downloaded EasyOCR models across container restarts

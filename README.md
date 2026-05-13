@@ -14,6 +14,7 @@ A full-stack Retrieval-Augmented Generation (RAG) system built with **FastAPI**,
 - **Feedback System** — Thumbs up/down feedback on answers for quality tracking
 - **Admin Analytics** — Dashboard with ingestion stats, query metrics, and feedback overview
 - **Document Management** — View, select, and delete uploaded documents
+- **Vision-Augmented RAG** — YOLO26n integration for real-time industrial machine detection, EasyOCR for error code extraction, and visual troubleshooting
 
 ## Tech Stack
 
@@ -24,6 +25,7 @@ A full-stack Retrieval-Augmented Generation (RAG) system built with **FastAPI**,
 | **Database** | PostgreSQL + pgvector                    |
 | **Graph DB** | Neo4j _(optional, auto-detected)_        |
 | **AI**       | Google Gemini (Embeddings & Generation)  |
+| **Vision AI**| YOLO26n, EasyOCR, OpenCV                 |
 | **Hosting**  | Render (backend + DB), Vercel (frontend) |
 
 ## Quick Start
@@ -113,6 +115,12 @@ RAG/
 │           ├── gemini_embedding_service.py  # Batch embedding with rate limiting
 │           ├── graph_extraction_service.py  # Neo4j knowledge graph builder
 │           └── graph_retrieval_service.py   # Graph-based retrieval
+├── vision_service/                 # Isolated CV microservice (YOLO26, EasyOCR)
+│   ├── Dockerfile
+│   ├── requirements.txt
+│   └── app/
+│       ├── main.py                 # FastAPI internal vision endpoints
+│       └── vision_core.py          # Core YOLO & OCR inference logic
 └── frontend/
     ├── package.json
     └── src/
@@ -184,6 +192,9 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for the full deployment guide.
 | `TOP_K`                  | Chunks to retrieve       | `5`                         |
 | `SIMILARITY_THRESHOLD`   | Min cosine similarity    | `0.7`                       |
 | `NEO4J_URI`              | Neo4j connection URI     | `bolt://127.0.0.1:7687`     |
+| `VISION_ENABLED`         | Enable Vision-RAG feature| `true`                      |
+| `VISION_DEMO_MODE`       | Run in demo mode         | `true`                      |
+| `VISION_SERVICE_URL`     | Vision Microservice URL  | `http://vision-service:8001`|
 
 ## Troubleshooting
 

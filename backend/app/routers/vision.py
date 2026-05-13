@@ -36,7 +36,7 @@ router = APIRouter(prefix="/vision", tags=["Vision RAG"])
 
 # Internal vision-service URL (Docker bridge network)
 VISION_SERVICE_URL = os.getenv("VISION_SERVICE_URL", "http://vision-service:8001")
-VISION_TIMEOUT = float(os.getenv("VISION_TIMEOUT_S", "30.0"))
+VISION_TIMEOUT = float(os.getenv("VISION_TIMEOUT_S", "120.0"))
 
 
 # ══════════════════════════════════════════════════════════════════════════════
