@@ -380,6 +380,22 @@ class DocumentIngestionService:
         }
         logger.info(f"[INGEST COMPLETE] {filename} — {metrics}")
 
+        # Dynamic BigQuery auto-load for tabular files
+        if file_extension in ["csv", "xlsx", "xls"]:
+            try:
+                from app.services.bigquery_service import BigQueryService
+                bq_service = BigQueryService()
+                if bq_service.client:
+                    threading.Thread(
+                        target=bq_service.upload_file_to_table,
+                        args=(file_path, filename),
+                        daemon=True
+                    ).start()
+                    logger.info(f"[BIGQUERY] Initiated background upload hook for {filename}")
+            except Exception as bq_err:
+                logger.warning(f"[BIGQUERY] Auto-upload hook failed to trigger: {bq_err}")
+
+
         return {
             "filename": filename,
             "num_chunks": num_chunks,

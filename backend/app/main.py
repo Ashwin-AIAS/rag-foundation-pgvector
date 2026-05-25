@@ -30,6 +30,7 @@ from app.models.feedback import FeedbackRequest, FeedbackResponse
 from app.models.document import Feedback, DocumentChunk, Document
 from app.routers.live_rag import router as live_rag_router
 from app.routers.vision import router as vision_router
+from app.routers.analytics import router as analytics_router
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +54,7 @@ app = FastAPI(
 
 app.include_router(live_rag_router)
 app.include_router(vision_router)
+app.include_router(analytics_router)
 
 # Configure CORS
 allowed_origins_str = os.getenv(
