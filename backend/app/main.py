@@ -423,6 +423,82 @@ def _background_ingest_worker(job_id: str, temp_path: str, filename: str):
                 pass
 
 
+
+def _background_gcs_ingest_worker(job_id: str):
+    """
+    Background worker: scans GCS bucket, downloads and ingests files, 
+    and updates a global job status tracker.
+    """
+    from app.database import SessionLocal
+    from app.services.gcs_ingestion_service import GCSIngestionService
+    
+    db = SessionLocal()
+    try:
+        # Mark job in progress
+        ingestion_jobs[job_id]["status"] = "PROCESSING"
+        logger.info(f"[GCS JOB {job_id}] Scanning and ingesting from bucket...")
+        
+        gcs_service = GCSIngestionService(db)
+        result = gcs_service.ingest_from_bucket()
+        
+        if result.get("status") == "success":
+            ingestion_jobs[job_id].update({
+                "status": "COMPLETE",
+                "ingested_count": result.get("ingested_count", 0),
+                "duplicate_count": result.get("duplicate_count", 0),
+                "failed_count": result.get("failed_count", 0),
+                "details": result
+            })
+            logger.info(f"[GCS JOB {job_id}] COMPLETE — Scanned bucket {result.get('bucket')} successfully.")
+        else:
+            ingestion_jobs[job_id].update({
+                "status": "FAILED",
+                "error": result.get("message", "GCS Scan Failed"),
+                "details": result
+            })
+            logger.error(f"[GCS JOB {job_id}] FAILED: {result.get('message')}")
+            
+    except Exception as e:
+        logger.error(f"[GCS JOB {job_id}] Background GCS ingestion failed: {e}")
+        ingestion_jobs[job_id].update({
+            "status": "FAILED",
+            "error": str(e)
+        })
+    finally:
+        db.close()
+
+
+@app.post("/ingest/gcs", status_code=202)
+async def ingest_from_gcs_bucket(
+    background_tasks: BackgroundTasks = BackgroundTasks()
+):
+    """
+    Trigger document scanning and ingestion from the configured GCS bucket.
+    Runs asynchronously in the background. Use the returned job_id to poll progress.
+    """
+    if not settings.GCP_PROJECT_ID or not settings.GCS_BUCKET_NAME:
+        raise HTTPException(
+            status_code=400,
+            detail="GCP_PROJECT_ID and GCS_BUCKET_NAME must be configured in settings to use GCS Ingestion."
+        )
+        
+    job_id = f"gcs-{uuid.uuid4()}"
+    ingestion_jobs[job_id] = {
+        "job_id": job_id,
+        "filename": f"GCS Bucket: {settings.GCS_BUCKET_NAME}",
+        "status": "QUEUED",
+        "error": None,
+        "metrics": None
+    }
+    
+    background_tasks.add_task(_background_gcs_ingest_worker, job_id)
+    
+    return {
+        "message": f"Scanning GCS bucket '{settings.GCS_BUCKET_NAME}' in background...",
+        "job_id": job_id
+    }
+
+
 @app.post("/ingest", status_code=202)
 async def ingest_document(
     files: List[UploadFile] = File(...),
