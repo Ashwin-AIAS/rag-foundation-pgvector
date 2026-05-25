@@ -70,6 +70,14 @@ class Settings:
     VISION_DEMO_MODE: bool = os.getenv("VISION_DEMO_MODE", "true").lower() == "true"
     OCR_ENGINE: str = os.getenv("OCR_ENGINE", "easyocr")
 
+    # GCP & Google Cloud Data Agent Kit Settings
+    GCP_PROJECT_ID: str = os.getenv("GCP_PROJECT_ID", "gen-lang-client-0015185806")
+    USE_GCP_DB: bool = os.getenv("USE_GCP_DB", "false").lower() == "true"
+    DB_INSTANCE_CONNECTION_NAME: str = os.getenv("DB_INSTANCE_CONNECTION_NAME", "")
+    DB_IAM_USER: str = os.getenv("DB_IAM_USER", "")
+    GCS_BUCKET_NAME: str = os.getenv("GCS_BUCKET_NAME", "")
+
+
     
     @property
     def database_url(self) -> str:
