@@ -17,6 +17,7 @@ import CommandPalette from './components/CommandPalette';
 import TiltCard from './components/TiltCard';
 import LiveVoiceAgent from './components/LiveVoiceAgent';
 import VisionTab from './components/VisionTab';
+import AgenticAnalyst from './components/AgenticAnalyst';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const HERO_STATUS = [
@@ -474,6 +475,7 @@ function App() {
               {[
                 { id: 'rag', label: '🧠 RAG Terminal' },
                 { id: 'vision', label: '⚙️ Vision-RAG' },
+                { id: 'analyst', label: '📊 Agentic Analyst' },
               ].map((tab) => (
                 <button
                   key={tab.id}
@@ -501,6 +503,9 @@ function App() {
 
             {/* Vision Tab */}
             {activeTab === 'vision' && <VisionTab />}
+
+            {/* Analyst Tab */}
+            {activeTab === 'analyst' && <AgenticAnalyst />}
 
             {/* RAG Tab */}
             {activeTab === 'rag' && (

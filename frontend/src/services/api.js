@@ -253,6 +253,24 @@ export async function getAnalytics() {
 }
 
 /**
+ * Run natural language analytical queries against BigQuery data
+ * @param {string} prompt - The natural language request
+ * @returns {Promise<Object>} The generated SQL and rows returned
+ */
+export async function queryAgenticAnalyst(prompt) {
+    const response = await fetch(`${API_BASE_URL}/analytics/query`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt })
+    });
+    if (!response.ok) {
+        const error = await response.json().catch(() => ({ detail: 'BigQuery query failed' }));
+        throw new Error(error.detail?.message || error.detail || `HTTP ${response.status}`);
+    }
+    return response.json();
+}
+
+/**
  * Fetch suggested follow-up questions for the completed query
  * @param {string} question - The original user question
  * @param {string} answer - The generated answer content
